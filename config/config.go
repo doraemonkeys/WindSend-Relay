@@ -3,9 +3,11 @@ package config
 import (
 	"encoding/json"
 	"flag"
+	"fmt"
 	"os"
 
 	"github.com/caarlos0/env/v11"
+	"github.com/doraemonkeys/WindSend-Relay/version"
 	"go.uber.org/zap"
 )
 
@@ -28,8 +30,15 @@ func ParseConfig() *Config {
 	var config Config
 	flag.StringVar(&config.ListenAddr, "listen-addr", "0.0.0.0:16779", "listen address")
 	flag.IntVar(&config.MaxConn, "max-conn", 100, "max connection")
-
+	showVersion := flag.Bool("version", false, "show version")
 	flag.Parse()
+
+	if *showVersion {
+		fmt.Println("WindSend-Relay", "v"+version.Version)
+		fmt.Println("BuildTime:", version.BuildTime)
+		fmt.Println("BuildHash:", version.BuildHash)
+		os.Exit(0)
+	}
 
 	if *useEnv {
 		return parseEnv()
