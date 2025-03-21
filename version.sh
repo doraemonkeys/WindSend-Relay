@@ -19,14 +19,14 @@ fi
 
 echo "PROJECT_VERSION: $PROJECT_VERSION"
 
+read -n 1 -s -r -p "Press any key to release v$PROJECT_VERSION ..."
+
 if ! command -v sedr &>/dev/null; then
     go install github.com/doraemonkeys/sedr@latest
 fi
 
 # modify version.go (Version = "x.x.x")
 sedr 'Version[\s]+=[\s]+\"(.*?)\"' "\$1" "$PROJECT_VERSION" "$PROJECT_VERSION_FILE_PATH"
-
-read -n 1 -s -r -p "Press any key to release v$PROJECT_VERSION ..."
 
 git add "$PROJECT_VERSION_FILE_PATH"
 git commit -m "release: v$PROJECT_VERSION"
