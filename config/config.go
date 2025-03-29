@@ -24,7 +24,7 @@ type Config struct {
 }
 
 func ParseConfig() *Config {
-	configFile := flag.String("config", "", "config file, other command line args will be ignored")
+	configFile := flag.String("config", "", "json config file, other command line args will be ignored")
 	useEnv := flag.Bool("use-env", false, "use env, other command line args will be ignored")
 
 	var config Config

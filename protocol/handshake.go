@@ -35,7 +35,11 @@ func handshakeECDH(req HandshakeReq) (ecdhPublicKey *ecdh.PublicKey, shared auth
 func handleHandshakeReq(req HandshakeReq, auther *auth.Authentication) (resp *HandshakeResp, shared auth.AES192Key, authKey auth.AES192Key, err error) {
 	// var authKey auth.AES192Key
 	if auther != nil {
-		ok, key := auther.Auth(req.SecretKeySelector, []byte(req.AuthField))
+		authField, err := base64.StdEncoding.DecodeString(req.AuthFieldB64)
+		if err != nil {
+			return nil, nil, nil, fmt.Errorf("failed to decode auth field: %w", err)
+		}
+		ok, key := auther.Auth(req.SecretKeySelector, authField)
 		if !ok {
 			return nil, nil, nil, fmt.Errorf("failed to authenticate")
 		}
@@ -59,6 +63,7 @@ func handleHandshakeReq(req HandshakeReq, auther *auth.Authentication) (resp *Ha
 	}
 	return &HandshakeResp{
 		EcdhPublicKeyB64: base64.StdEncoding.EncodeToString(ecdhPublicKeyBytes),
+		Code:             StatusSuccess,
 	}, shared, authKey, nil
 }
 
@@ -70,7 +75,11 @@ func Handshake(conn net.Conn, auther *auth.Authentication) (cipher crypto.Symmet
 	}
 	resp, sharedKey, authKey, err := handleHandshakeReq(req, auther)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to handle handshake request: %w", err)
+		_ = SendHandshakeResp(conn, HandshakeResp{
+			Code: StatusAuthFailed,
+			Msg:  err.Error(),
+		})
+		return nil, nil, fmt.Errorf("handle handshake request: %w", err)
 	}
 	err = SendHandshakeResp(conn, *resp)
 	if err != nil {

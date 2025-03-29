@@ -80,11 +80,6 @@ func (c *Connection) DetectAlive() (alive bool) {
 	}
 }
 
-// type SecretInfo struct {
-// 	SecretKey string `json:"secret_key" env:"KEY,notEmpty"`
-// 	MaxConn   int    `json:"max_conn" env:"MAX_CONN" envDefault:"5"`
-// }
-
 func NewRelay(config config.Config) *Relay {
 	var secretKeys []string
 	for _, secret := range config.SecretInfo {
@@ -109,6 +104,8 @@ func NewRelay(config config.Config) *Relay {
 }
 
 func (r *Relay) Run() {
+	go r.detectConnectionAlive()
+
 	listener, err := net.Listen("tcp", r.config.ListenAddr)
 	if err != nil {
 		zap.L().Fatal("Failed to listen", zap.Error(err))
@@ -128,11 +125,13 @@ func (r *Relay) mainProcess(conn net.Conn) {
 	cipher, authKey, err := protocol.Handshake(conn, r.auther)
 	if err != nil {
 		zap.L().Error("Failed to handshake", zap.Error(err))
+		_ = conn.Close()
 		return
 	}
 	head, err := protocol.ReadReqHead(conn, cipher)
 	if err != nil {
 		zap.L().Error("Failed to read common request head", zap.Error(err))
+		_ = conn.Close()
 		return
 	}
 	switch head.Action {
@@ -150,13 +149,31 @@ func (r *Relay) mainProcess(conn net.Conn) {
 }
 
 func (r *Relay) handleConnect(conn net.Conn, head protocol.ReqHead, cipher crypto.SymmetricCipher, authKey auth.AES192Key) {
+	var success bool
+	defer func() {
+		if !success {
+			_ = conn.Close()
+		}
+	}()
+
 	req, err := protocol.ReadReq[protocol.ConnectionReq](conn, head.DataLen, cipher)
 	if err != nil {
-		_ = conn.Close()
 		zap.L().Error("Failed to read connection request", zap.Error(err))
 		return
 	}
 	zap.L().Info("Connection request", zap.String("id", req.ID))
+
+	authKeyB64 := base64.StdEncoding.EncodeToString(authKey)
+	keyStatus := r.keyConnLimit[authKeyB64]
+	if keyStatus.count.Load() >= int32(keyStatus.limit) {
+		zap.L().Error("Too many connections", zap.String("id", req.ID))
+		err = protocol.SendHeadError(conn, protocol.ActionConnect, "Too many connections", cipher)
+		if err != nil {
+			zap.L().Error("Failed to send error", zap.Error(err))
+		}
+		return
+	}
+
 	if c, ok := conn.(*net.TCPConn); ok {
 		err = c.SetKeepAlive(true)
 		if err != nil {
@@ -170,14 +187,13 @@ func (r *Relay) handleConnect(conn net.Conn, head protocol.ReqHead, cipher crypt
 	r.connectionsMu.RLock()
 	{
 		if c, ok := r.connections[req.ID]; ok {
-			r.connectionsMu.Unlock()
+			r.connectionsMu.RUnlock()
 			if c.DetectAlive() {
 				zap.L().Error("Connection already exists", zap.String("id", req.ID))
 				err = protocol.SendHeadError(conn, protocol.ActionConnect, "Connection already exists", cipher)
 				if err != nil {
 					zap.L().Error("Failed to send error", zap.Error(err))
 				}
-				_ = conn.Close()
 				return
 			}
 
@@ -187,12 +203,12 @@ func (r *Relay) handleConnect(conn net.Conn, head protocol.ReqHead, cipher crypt
 		}
 		if len(r.connections) >= r.config.MaxConn {
 			r.connectionsMu.RUnlock()
+
 			zap.L().Error("Too many connections", zap.String("id", req.ID))
 			err = protocol.SendHeadError(conn, protocol.ActionConnect, "Too many connections", cipher)
 			if err != nil {
 				zap.L().Error("Failed to send error", zap.Error(err))
 			}
-			_ = conn.Close()
 			return
 		}
 	}
@@ -207,9 +223,10 @@ func (r *Relay) handleConnect(conn net.Conn, head protocol.ReqHead, cipher crypt
 		r.RemoveConnection(req.ID)
 		return
 	}
+	success = true
 }
 
-func (r *Relay) detectConnectionAlive(id string) {
+func (r *Relay) detectConnectionAlive() {
 	for {
 		time.Sleep(time.Second * 30)
 		if len(r.connections) == 0 {
@@ -228,6 +245,8 @@ func (r *Relay) detectConnectionAlive(id string) {
 			err := protocol.SendHeartbeat(c.Conn, false, c.Cipher)
 			if err != nil {
 				r.RemoveConnection(c.ID)
+			} else {
+				c.LastActive = time.Now()
 			}
 			c.Mu.Unlock()
 		}
@@ -307,15 +326,15 @@ func (r *Relay) handleRelay(conn net.Conn, head protocol.ReqHead, cipher crypto.
 	targetConn, ok := r.connections[req.ID]
 	r.connectionsMu.RUnlock()
 	if !ok {
-		l.Error("Connection not found", zap.String("ID", req.ID))
-		err := protocol.SendHeadError(conn, protocol.ActionRelay, "Connection not found", cipher)
+		l.Error("device not online")
+		err := protocol.SendHeadError(conn, protocol.ActionRelay, "device not online", cipher)
 		if err != nil {
 			l.Error("Failed to send error", zap.Error(err))
 		}
 		return
 	}
 	if targetConn.Relaying {
-		l.Warn("Connection is already relaying", zap.String("ID", req.ID))
+		l.Warn("Connection is already relaying")
 	}
 
 	targetConn.Mu.Lock()

@@ -39,9 +39,9 @@ func NewAuthentication(keys []string) *Authentication {
 }
 
 func HashToAES192Key(c []byte) AES192Key {
-	if len(c) == 0 {
-		panic("unreachable: Invalid input string")
-	}
+	// if len(c) == 0 {
+	// 	panic("unreachable: Invalid input string")
+	// }
 	hash, err := doraemon.ComputeSHA256(bytes.NewReader(c))
 	if err != nil {
 		panic("unreachable")
@@ -49,7 +49,7 @@ func HashToAES192Key(c []byte) AES192Key {
 	return hash[:192/8]
 }
 
-// return 4 bytes encoded in hex
+// return 4 bytes hash prefix encoded in hex
 func getAES192KeySelector(key AES192Key) string {
 	hash, err := doraemon.ComputeSHA256Hex(bytes.NewReader(key))
 	if err != nil {
