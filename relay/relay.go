@@ -16,14 +16,13 @@ import (
 	"go.uber.org/zap"
 )
 
-//	type Config struct {
-//	    ListenAddr  string   `json:"listen_addr" env:"WS_LISTEN_ADDR,notEmpty" envDefault:"0.0.0.0:16779"`
-//	    MaxConn     int      `json:"max_conn" env:"WS_MAX_CONN" envDefault:"100"`
-//	    IDWhitelist []string `json:"id_whitelist" envPrefix:"WS_ID_WHITELIST"`
-//	}
 type Relay struct {
-	config        config.Config
-	auther        *auth.Authentication
+	config config.Config
+	// nil when no authentication
+	auther *auth.Authentication
+	// enableAuth    bool
+
+	// ID -> Connection
 	connections   map[string]*Connection
 	connectionsMu sync.RWMutex
 	keyConnLimit  map[string]*struct {
@@ -45,13 +44,17 @@ type Connection struct {
 	Mu         sync.Mutex
 }
 
-func (c *Connection) DetectAlive() (alive bool) {
-	c.Mu.Lock()
-	defer c.Mu.Unlock()
+func (c *Connection) DetectAlive(useLock bool) (alive bool) {
+	if useLock {
+		c.Mu.Lock()
+		defer c.Mu.Unlock()
+	}
 
-	err := protocol.SendHeartbeat(c.Conn, true, c.Cipher)
+	l := zap.L().With(zap.String("id", c.ID), zap.String("addr", c.Conn.RemoteAddr().String()))
+
+	err := protocol.SendHeartbeat(c.Conn, c.ID, c.Cipher)
 	if err != nil {
-		zap.L().Error("Failed to send heartbeat", zap.Error(err))
+		l.Error("sent heartbeat failed(detect alive)", zap.Error(err))
 		return false
 	}
 	result := make(chan error, 1)
@@ -69,8 +72,7 @@ func (c *Connection) DetectAlive() (alive bool) {
 	select {
 	case err := <-result:
 		if err != nil {
-			zap.L().Error("Failed to receive heartbeat", zap.Error(err), zap.String("addr", c.Conn.RemoteAddr().String()),
-				zap.String("id", c.ID))
+			l.Error("Failed to receive heartbeat", zap.Error(err))
 			return false
 		}
 		c.LastActive = time.Now()
@@ -90,16 +92,22 @@ func NewRelay(config config.Config) *Relay {
 		limit int
 	}, len(secretKeys))
 	for _, secret := range config.SecretInfo {
-		connLimit[secret.SecretKey] = &struct {
+		authKeyB64 := base64.StdEncoding.EncodeToString(auth.HashToAES192Key([]byte(secret.SecretKey)))
+		connLimit[authKeyB64] = &struct {
 			count atomic.Int32
 			limit int
 		}{count: atomic.Int32{}, limit: secret.MaxConn}
 	}
 	auther := auth.NewAuthentication(secretKeys)
+	if len(secretKeys) == 0 {
+		zap.L().Warn("No secret keys, authentication is disabled")
+		auther = nil
+	}
 	return &Relay{
 		config:       config,
 		auther:       auther,
 		keyConnLimit: connLimit,
+		connections:  make(map[string]*Connection),
 	}
 }
 
@@ -143,7 +151,7 @@ func (r *Relay) mainProcess(conn net.Conn) {
 		r.handleRelay(conn, head, cipher)
 	default:
 		zap.L().Error("Unknown action", zap.Any("action", head.Action))
-		_ = protocol.SendHeadError(conn, head.Action, "Unknown action")
+		_ = protocol.SendRespHeadError(conn, head.Action, "Unknown action")
 		_ = conn.Close()
 	}
 }
@@ -161,13 +169,13 @@ func (r *Relay) handleConnect(conn net.Conn, head protocol.ReqHead, cipher crypt
 		zap.L().Error("Failed to read connection request", zap.Error(err))
 		return
 	}
-	zap.L().Info("Connection request", zap.String("id", req.ID))
+	zap.L().Debug("Connection request", zap.String("id", req.ID))
 
 	authKeyB64 := base64.StdEncoding.EncodeToString(authKey)
 	keyStatus := r.keyConnLimit[authKeyB64]
 	if keyStatus.count.Load() >= int32(keyStatus.limit) {
 		zap.L().Error("Too many connections", zap.String("id", req.ID))
-		err = protocol.SendHeadError(conn, protocol.ActionConnect, "Too many connections", cipher)
+		err = protocol.SendRespHeadError(conn, protocol.ActionConnect, "Too many connections", cipher)
 		if err != nil {
 			zap.L().Error("Failed to send error", zap.Error(err))
 		}
@@ -188,16 +196,16 @@ func (r *Relay) handleConnect(conn net.Conn, head protocol.ReqHead, cipher crypt
 	{
 		if c, ok := r.connections[req.ID]; ok {
 			r.connectionsMu.RUnlock()
-			if c.DetectAlive() {
+			if c.DetectAlive(true) {
 				zap.L().Error("Connection already exists", zap.String("id", req.ID))
-				err = protocol.SendHeadError(conn, protocol.ActionConnect, "Connection already exists", cipher)
+				err = protocol.SendRespHeadError(conn, protocol.ActionConnect, "Connection already exists", cipher)
 				if err != nil {
 					zap.L().Error("Failed to send error", zap.Error(err))
 				}
 				return
 			}
 
-			r.RemoveConnection(req.ID)
+			r.RemoveLongConnection(req.ID)
 
 			r.connectionsMu.RLock()
 		}
@@ -205,7 +213,7 @@ func (r *Relay) handleConnect(conn net.Conn, head protocol.ReqHead, cipher crypt
 			r.connectionsMu.RUnlock()
 
 			zap.L().Error("Too many connections", zap.String("id", req.ID))
-			err = protocol.SendHeadError(conn, protocol.ActionConnect, "Too many connections", cipher)
+			err = protocol.SendRespHeadError(conn, protocol.ActionConnect, "Too many connections", cipher)
 			if err != nil {
 				zap.L().Error("Failed to send error", zap.Error(err))
 			}
@@ -214,15 +222,18 @@ func (r *Relay) handleConnect(conn net.Conn, head protocol.ReqHead, cipher crypt
 	}
 	r.connectionsMu.RUnlock()
 
-	r.AddConnection(req.ID, conn, authKey)
+	r.AddConnection(req.ID, conn, authKey, cipher)
 
-	err = protocol.SendHeadOk(conn, protocol.ActionConnect, cipher)
+	err = protocol.SendRespHeadOk(conn, protocol.ActionConnect, cipher)
 	if err != nil {
 		zap.L().Error("Failed to send OK", zap.Error(err), zap.String("id", req.ID),
 			zap.String("addr", conn.RemoteAddr().String()))
-		r.RemoveConnection(req.ID)
+		r.RemoveLongConnection(req.ID)
 		return
 	}
+
+	zap.L().Info("Connection established", zap.String("id", req.ID),
+		zap.String("addr", conn.RemoteAddr().String()))
 	success = true
 }
 
@@ -242,9 +253,11 @@ func (r *Relay) detectConnectionAlive() {
 
 		for _, c := range connections {
 			c.Mu.Lock()
-			err := protocol.SendHeartbeat(c.Conn, false, c.Cipher)
+			err := protocol.SendHeartbeatNoResp(c.Conn, c.Cipher)
 			if err != nil {
-				r.RemoveConnection(c.ID)
+				zap.L().Info("detect connection alive failed", zap.Error(err), zap.String("id", c.ID),
+					zap.String("addr", c.Conn.RemoteAddr().String()))
+				r.RemoveLongConnection(c.ID)
 			} else {
 				c.LastActive = time.Now()
 			}
@@ -254,7 +267,7 @@ func (r *Relay) detectConnectionAlive() {
 	}
 }
 
-func (r *Relay) AddConnection(id string, conn net.Conn, authKey auth.AES192Key) {
+func (r *Relay) AddConnection(id string, conn net.Conn, authKey auth.AES192Key, cipher crypto.SymmetricCipher) {
 	r.connectionsMu.Lock()
 	c := &Connection{
 		ID:         id,
@@ -262,13 +275,14 @@ func (r *Relay) AddConnection(id string, conn net.Conn, authKey auth.AES192Key) 
 		LastActive: time.Now(),
 		Relaying:   false,
 		AuthkeyB64: base64.StdEncoding.EncodeToString(authKey),
+		Cipher:     cipher,
 	}
 	r.connections[id] = c
 	r.connectionsMu.Unlock()
 	r.addKeyConnCount(c.AuthkeyB64, 1)
 }
 
-func (r *Relay) RemoveConnection(id string) {
+func (r *Relay) RemoveLongConnection(id string) {
 	r.connectionsMu.Lock()
 	c := r.removeConnection(id)
 	r.connectionsMu.Unlock()
@@ -301,7 +315,7 @@ func (r *Relay) handlePing(conn net.Conn, _ protocol.ReqHead, cipher crypto.Symm
 
 	l := zap.L().With(zap.String("Action", "Ping"), zap.String("addr", conn.RemoteAddr().String()))
 	l.Info("Ping request")
-	err := protocol.SendHeadOk(conn, protocol.ActionPing, cipher)
+	err := protocol.SendRespHeadOk(conn, protocol.ActionPing, cipher)
 	if err != nil {
 		l.Error("Failed to send OK", zap.Error(err))
 		return
@@ -327,41 +341,100 @@ func (r *Relay) handleRelay(conn net.Conn, head protocol.ReqHead, cipher crypto.
 	r.connectionsMu.RUnlock()
 	if !ok {
 		l.Error("device not online")
-		err := protocol.SendHeadError(conn, protocol.ActionRelay, "device not online", cipher)
+		err := protocol.SendRespHeadError(conn, protocol.ActionRelay, "device not online", cipher)
 		if err != nil {
 			l.Error("Failed to send error", zap.Error(err))
 		}
 		return
 	}
 	if targetConn.Relaying {
-		l.Warn("Connection is already relaying")
+		l.Error("Connection is already relaying")
+		err := protocol.SendRespHeadError(conn, protocol.ActionRelay, "Connection is already relaying", cipher)
+		if err != nil {
+			l.Error("Failed to send error", zap.Error(err))
+		}
+		return
+	}
+
+	err = protocol.SendRespHeadOKWithMsg(conn, protocol.ActionRelay, "Relay start", cipher)
+	if err != nil {
+		l.Error("Failed to send relay start", zap.Error(err))
+		return
 	}
 
 	targetConn.Mu.Lock()
 	defer targetConn.Mu.Unlock()
 	targetConn.Relaying = true
-	err = r.relay(targetConn.Conn, conn)
+	defer func() {
+		targetConn.Relaying = false
+	}()
+	err = protocol.SendRelayStart(targetConn.Conn, targetConn.Cipher)
+	if err != nil {
+		l.Error("Failed to send relay start", zap.Error(err))
+		return
+	}
+	err = r.relay(targetConn, conn)
 	if err != nil {
 		l.Error("relay data failed", zap.Error(err))
+		r.RemoveLongConnection(targetConn.ID)
+		return
 	}
+	zap.L().Debug("relay data success", zap.String("targetConn", targetConn.ID),
+		zap.String("reqConn", conn.RemoteAddr().String()))
 	targetConn.LastActive = time.Now()
-	targetConn.Relaying = false
+
 }
 
-func (r *Relay) relay(targetConn net.Conn, reqConn net.Conn) error {
+func Copy(dst io.Writer, src io.Reader) (written int64, err error) {
+	buf := make([]byte, 20*1024)
+	for {
+		nr, er := src.Read(buf)
+		if nr > 0 {
+			fmt.Println("try to write to dst", nr)
+			nw, ew := dst.Write(buf[0:nr])
+			if nw > 0 {
+				written += int64(nw)
+			}
+			if ew != nil {
+				err = ew
+				break
+			}
+		}
+		if er != nil {
+			if er != io.EOF {
+				err = er
+			}
+			break
+		}
+	}
+	return
+}
+
+func (r *Relay) relay(targetConn *Connection, reqConn net.Conn) error {
 	var errCH = make(chan error, 2)
+	activelyTimeOut := false
 	go func() {
-		_, err := io.Copy(targetConn, reqConn)
+		_, err := Copy(targetConn.Conn, reqConn)
+		activelyTimeOut = true
+		targetConn.Conn.SetReadDeadline(time.Unix(1743698847, 0))
 		if err != nil {
-			errCH <- fmt.Errorf("failed to relay data to client: %w", err)
+			errCH <- fmt.Errorf("relay data to client: %w", err)
+			return
 		}
+		errCH <- nil
+		zap.L().Debug("reqConn -> targetConn success")
 	}()
 	go func() {
-		_, err := io.Copy(reqConn, targetConn)
-		if err != nil {
-			errCH <- fmt.Errorf("failed to relay data to server: %w", err)
+		_, err := Copy(reqConn, targetConn.Conn)
+		if err != nil && !activelyTimeOut {
+			errCH <- fmt.Errorf("relay data to server: %w", err)
+			return
 		}
+		errCH <- nil
+		zap.L().Debug("targetConn -> reqConn success")
 	}()
+	zap.L().Debug("relay start", zap.String("targetConn", targetConn.Conn.RemoteAddr().String()),
+		zap.String("reqConn", reqConn.RemoteAddr().String()))
 	var err error
 	for range 2 {
 		err = <-errCH
@@ -369,5 +442,21 @@ func (r *Relay) relay(targetConn net.Conn, reqConn net.Conn) error {
 			break
 		}
 	}
-	return err
+	if err != nil {
+		return err
+	}
+	targetConn.Conn.SetReadDeadline(time.Time{})
+
+	go func() {
+		// zap.L().Debug("try to read relay end flag")
+		alive := targetConn.DetectAlive(false)
+		if alive {
+			zap.L().Debug("read relay end flag success")
+		} else {
+			zap.L().Error("targetConn is not alive after relay", zap.String("id", targetConn.ID),
+				zap.String("addr", targetConn.Conn.RemoteAddr().String()))
+			r.RemoveLongConnection(targetConn.ID)
+		}
+	}()
+	return nil
 }

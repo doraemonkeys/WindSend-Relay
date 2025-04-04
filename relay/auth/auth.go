@@ -2,10 +2,13 @@ package auth
 
 import (
 	"bytes"
+	"encoding/hex"
+	"fmt"
 	"sync"
 
 	"github.com/doraemonkeys/doraemon"
 	"github.com/doraemonkeys/doraemon/crypto"
+	"go.uber.org/zap"
 )
 
 type AES192Key []byte
@@ -17,8 +20,9 @@ type Authentication struct {
 }
 
 func NewAuthentication(keys []string) *Authentication {
+	zap.L().Info("Server secret key count", zap.Int("count", len(keys)))
 	selectors := make(map[string][]AES192Key, len(keys))
-	for _, key := range keys {
+	for i, key := range keys {
 		aesKey := HashToAES192Key([]byte(key))
 		selector := getAES192KeySelector(aesKey)
 		ks, ok := selectors[selector]
@@ -30,6 +34,8 @@ func NewAuthentication(keys []string) *Authentication {
 				continue
 			}
 		}
+		zap.L().Debug(fmt.Sprintf("secret key: %d, key: %s", i, key))
+		zap.L().Debug(fmt.Sprintf("selector: %s, aesKey: %s", selector, hex.EncodeToString(aesKey)))
 		selectors[selector] = append(ks, aesKey)
 	}
 	return &Authentication{

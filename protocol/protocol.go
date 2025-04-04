@@ -47,9 +47,10 @@ type ConnectionReq struct {
 type Action string
 
 const (
-	ActionConnect   Action = "connect"
-	ActionPing      Action = "ping"
-	ActionRelay     Action = "relay"
+	ActionConnect Action = "connect"
+	ActionPing    Action = "ping"
+	ActionRelay   Action = "relay"
+	// ActionClose is used to close the long connection
 	ActionClose     Action = "close"
 	ActionHeartbeat Action = "heartbeat"
 )

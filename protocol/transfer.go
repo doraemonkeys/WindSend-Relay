@@ -87,11 +87,16 @@ func ReadReq[T any](conn net.Conn, dataLen int, cipher ...crypto.SymmetricCipher
 	return req, nil
 }
 
+// sendStruct writes a struct to the connection.
+//
+//	|itemLen|item|
+//	|4 bytes|itemLen bytes|
 func sendStruct[T any](conn net.Conn, item T, cipher ...crypto.SymmetricCipher) error {
 	respBuf, err := json.Marshal(item)
 	if err != nil {
 		return fmt.Errorf("marshal item failed, err: %w", err)
 	}
+	// fmt.Println("send struct", string(respBuf))
 	if len(cipher) != 0 {
 		var err error
 		respBuf, err = cipher[0].Encrypt(respBuf)
@@ -113,18 +118,53 @@ func sendStruct[T any](conn net.Conn, item T, cipher ...crypto.SymmetricCipher) 
 	return nil
 }
 
+func sendReqHeadWithBody[T any](conn net.Conn, action Action, body T, cipher ...crypto.SymmetricCipher) error {
+	jsonReq, err := json.Marshal(body)
+	if err != nil {
+		return fmt.Errorf("marshal req with body failed, err: %w", err)
+	}
+	if len(cipher) != 0 {
+		var err error
+		jsonReq, err = cipher[0].Encrypt(jsonReq)
+		if err != nil {
+			return fmt.Errorf("encrypt req with body failed, err: %w", err)
+		}
+	}
+
+	var head ReqHead
+	head.Action = action
+	head.DataLen = len(jsonReq)
+	err = sendStruct(conn, head, cipher...)
+	if err != nil {
+		return fmt.Errorf("send req head failed, err: %w", err)
+	}
+	_, err = conn.Write(jsonReq)
+	if err != nil {
+		return fmt.Errorf("write req with body failed, err: %w", err)
+	}
+	return nil
+}
+
 func SendHandshakeResp(conn net.Conn, resp HandshakeResp) error {
 	return sendStruct(conn, resp)
 }
 
-func SendHeartbeat(conn net.Conn, needResp bool, cipher ...crypto.SymmetricCipher) error {
+func SendHeartbeatNoResp(conn net.Conn, cipher ...crypto.SymmetricCipher) error {
 	var head ReqHead
 	head.Action = ActionHeartbeat
 	head.DataLen = 0
 	return sendStruct(conn, head, cipher...)
 }
 
-func SendHeadOk(conn net.Conn, action Action, cipher ...crypto.SymmetricCipher) error {
+func SendHeartbeat(conn net.Conn, id string, cipher ...crypto.SymmetricCipher) error {
+	var req HeartbeatReq
+	req.CommonReq.ID = id
+	req.NeedResp = true
+
+	return sendReqHeadWithBody(conn, ActionHeartbeat, req, cipher...)
+}
+
+func SendRespHeadOk(conn net.Conn, action Action, cipher ...crypto.SymmetricCipher) error {
 	var head RespHead
 	head.Code = StatusSuccess
 	head.Msg = "OK"
@@ -132,7 +172,7 @@ func SendHeadOk(conn net.Conn, action Action, cipher ...crypto.SymmetricCipher) 
 	return sendStruct(conn, head, cipher...)
 }
 
-func SendHeadOKWithMsg(conn net.Conn, action Action, msg string, cipher ...crypto.SymmetricCipher) error {
+func SendRespHeadOKWithMsg(conn net.Conn, action Action, msg string, cipher ...crypto.SymmetricCipher) error {
 	var head RespHead
 	head.Code = StatusSuccess
 	head.Msg = msg
@@ -140,7 +180,7 @@ func SendHeadOKWithMsg(conn net.Conn, action Action, msg string, cipher ...crypt
 	return sendStruct(conn, head, cipher...)
 }
 
-func SendHeadError(conn net.Conn, action Action, msg string, cipher ...crypto.SymmetricCipher) error {
+func SendRespHeadError(conn net.Conn, action Action, msg string, cipher ...crypto.SymmetricCipher) error {
 	var head RespHead
 	head.Code = StatusError
 	head.Msg = msg
@@ -148,26 +188,8 @@ func SendHeadError(conn net.Conn, action Action, msg string, cipher ...crypto.Sy
 	return sendStruct(conn, head, cipher...)
 }
 
-func sendOKWithBody(conn net.Conn, action Action, data []byte, cipher ...crypto.SymmetricCipher) error {
-	var head RespHead
-	head.Code = StatusSuccess
-	head.Msg = "OK"
-	head.Action = action
-	if len(cipher) != 0 {
-		var err error
-		data, err = cipher[0].Encrypt(data)
-		if err != nil {
-			return fmt.Errorf("encrypt data failed, err: %w", err)
-		}
-	}
-	head.DataLen = len(data)
-	err := sendStruct(conn, head, cipher...)
-	if err != nil {
-		return fmt.Errorf("send head failed, err: %w", err)
-	}
-	_, err = conn.Write(data)
-	if err != nil {
-		return fmt.Errorf("send data failed, err: %w", err)
-	}
-	return nil
+func SendRelayStart(conn net.Conn, cipher ...crypto.SymmetricCipher) error {
+	var head ReqHead
+	head.Action = ActionRelay
+	return sendStruct(conn, head, cipher...)
 }
