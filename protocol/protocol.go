@@ -13,6 +13,8 @@ type HandshakeReq struct {
 	SecretKeySelector string `json:"secretKeySelector"`
 	// AuthFieldB64 is encrypted with secret key,["AUTH"+RANDOM_STRING(16)]
 	AuthFieldB64 string `json:"authFieldB64"`
+	// AuthAAD is the additional authentication data
+	AuthAAD string `json:"authAAD"`
 	// EcdhPublicKey is the public key of the ECDH X25519 key exchange
 	EcdhPublicKeyB64 string `json:"ecdhPublicKeyB64"`
 }

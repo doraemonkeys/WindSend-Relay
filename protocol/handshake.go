@@ -40,13 +40,17 @@ func handleHandshakeReq(req HandshakeReq, auther *auth.Authentication, noAuth bo
 	if !noAuth && req.AuthFieldB64 == "" {
 		return nil, nil, nil, fmt.Errorf("invalid handshake request: no auth field")
 	}
+	if req.AuthFieldB64 != "" && req.AuthAAD == "" {
+		// Force the client to send the auth aad
+		return nil, nil, nil, fmt.Errorf("invalid handshake request: no auth aad")
+	}
 	// As long as AuthFieldB64 is not empty, authentication is performed
 	if req.AuthFieldB64 != "" && auther != nil {
 		authField, err := base64.StdEncoding.DecodeString(req.AuthFieldB64)
 		if err != nil {
 			return nil, nil, nil, fmt.Errorf("failed to decode auth field: %w", err)
 		}
-		ok, key := auther.Auth(req.SecretKeySelector, authField)
+		ok, key := auther.Auth(req.SecretKeySelector, authField, []byte(req.AuthAAD))
 		if !ok {
 			return nil, nil, nil, fmt.Errorf("failed to authenticate")
 		}

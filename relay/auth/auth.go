@@ -64,7 +64,7 @@ func getAES192KeySelector(key AES192Key) string {
 	return hash[:8]
 }
 
-func (a *Authentication) Auth(selector string, authField []byte) (bool, AES192Key) {
+func (a *Authentication) Auth(selector string, authField []byte, additionalData ...[]byte) (bool, AES192Key) {
 	a.selectorMu.RLock()
 	ks, ok := a.KeySelectors[selector]
 	a.selectorMu.RUnlock()
@@ -76,7 +76,7 @@ func (a *Authentication) Auth(selector string, authField []byte) (bool, AES192Ke
 		if err != nil {
 			panic("unreachable: Invalid AES192Key " + err.Error())
 		}
-		plaintext, err := cipher.DecryptAuth(authField, []byte("AUTH"))
+		plaintext, err := cipher.DecryptAuth(authField, additionalData...)
 		if err != nil {
 			continue
 		}
