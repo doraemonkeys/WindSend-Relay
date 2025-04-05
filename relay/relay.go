@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
+	"math"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -18,7 +19,7 @@ import (
 
 type Relay struct {
 	config config.Config
-	// nil when no authentication
+	// nil when no secret keys
 	auther *auth.Authentication
 	// enableAuth    bool
 
@@ -29,7 +30,7 @@ type Relay struct {
 		count atomic.Int32
 		limit int
 	}
-	// keyConnLimitMu sync.RWMutex
+	keyConnLimitMu sync.RWMutex
 }
 
 type Connection struct {
@@ -103,6 +104,9 @@ func NewRelay(config config.Config) *Relay {
 		zap.L().Warn("No secret keys, authentication is disabled")
 		auther = nil
 	}
+	if !config.NoAuth && len(secretKeys) == 0 {
+		zap.L().Fatal("Enable authentication but no secret keys")
+	}
 	return &Relay{
 		config:       config,
 		auther:       auther,
@@ -130,7 +134,7 @@ func (r *Relay) Run() {
 }
 
 func (r *Relay) mainProcess(conn net.Conn) {
-	cipher, authKey, err := protocol.Handshake(conn, r.auther)
+	cipher, authKey, err := protocol.Handshake(conn, r.auther, r.config.NoAuth)
 	if err != nil {
 		zap.L().Error("Failed to handshake", zap.Error(err))
 		_ = conn.Close()
@@ -156,6 +160,19 @@ func (r *Relay) mainProcess(conn net.Conn) {
 	}
 }
 
+func (r *Relay) checkConnLimit(key string) bool {
+	r.keyConnLimitMu.RLock()
+	v, ok := r.keyConnLimit[key]
+	r.keyConnLimitMu.RUnlock()
+	if !ok {
+		if r.auther != nil {
+			panic("unknown key: " + key)
+		}
+		return true
+	}
+	return v.count.Load() < int32(v.limit)
+}
+
 func (r *Relay) handleConnect(conn net.Conn, head protocol.ReqHead, cipher crypto.SymmetricCipher, authKey auth.AES192Key) {
 	var success bool
 	defer func() {
@@ -172,8 +189,7 @@ func (r *Relay) handleConnect(conn net.Conn, head protocol.ReqHead, cipher crypt
 	zap.L().Debug("Connection request", zap.String("id", req.ID))
 
 	authKeyB64 := base64.StdEncoding.EncodeToString(authKey)
-	keyStatus := r.keyConnLimit[authKeyB64]
-	if keyStatus.count.Load() >= int32(keyStatus.limit) {
+	if !r.checkConnLimit(authKeyB64) {
 		zap.L().Error("Too many connections", zap.String("id", req.ID))
 		err = protocol.SendRespHeadError(conn, protocol.ActionConnect, "Too many connections", cipher)
 		if err != nil {
@@ -252,6 +268,9 @@ func (r *Relay) detectConnectionAlive() {
 		r.connectionsMu.RUnlock()
 
 		for _, c := range connections {
+			if c.Relaying {
+				continue
+			}
 			c.Mu.Lock()
 			err := protocol.SendHeartbeatNoResp(c.Conn, c.Cipher)
 			if err != nil {
@@ -301,11 +320,20 @@ func (r *Relay) removeConnection(id string) *Connection {
 }
 
 func (r *Relay) addKeyConnCount(key string, add int32) (new int32) {
-	// r.keyConnLimitMu.RLock()
+	r.keyConnLimitMu.RLock()
 	v, ok := r.keyConnLimit[key]
-	// r.keyConnLimitMu.RUnlock()
+	r.keyConnLimitMu.RUnlock()
 	if !ok {
-		panic("unknown key: " + key)
+		if r.auther != nil {
+			panic("unknown key: " + key)
+		}
+		v = &struct {
+			count atomic.Int32
+			limit int
+		}{count: atomic.Int32{}, limit: math.MaxInt32}
+		r.keyConnLimitMu.Lock()
+		r.keyConnLimit[key] = v
+		r.keyConnLimitMu.Unlock()
 	}
 	return v.count.Add(add)
 }
@@ -385,38 +413,13 @@ func (r *Relay) handleRelay(conn net.Conn, head protocol.ReqHead, cipher crypto.
 
 }
 
-func Copy(dst io.Writer, src io.Reader) (written int64, err error) {
-	buf := make([]byte, 20*1024)
-	for {
-		nr, er := src.Read(buf)
-		if nr > 0 {
-			fmt.Println("try to write to dst", nr)
-			nw, ew := dst.Write(buf[0:nr])
-			if nw > 0 {
-				written += int64(nw)
-			}
-			if ew != nil {
-				err = ew
-				break
-			}
-		}
-		if er != nil {
-			if er != io.EOF {
-				err = er
-			}
-			break
-		}
-	}
-	return
-}
-
 func (r *Relay) relay(targetConn *Connection, reqConn net.Conn) error {
 	var errCH = make(chan error, 2)
 	activelyTimeOut := false
 	go func() {
-		_, err := Copy(targetConn.Conn, reqConn)
+		_, err := io.Copy(targetConn.Conn, reqConn)
 		activelyTimeOut = true
-		targetConn.Conn.SetReadDeadline(time.Unix(1743698847, 0))
+		targetConn.Conn.SetReadDeadline(time.Unix(1136142245, 0))
 		if err != nil {
 			errCH <- fmt.Errorf("relay data to client: %w", err)
 			return
@@ -425,7 +428,7 @@ func (r *Relay) relay(targetConn *Connection, reqConn net.Conn) error {
 		zap.L().Debug("reqConn -> targetConn success")
 	}()
 	go func() {
-		_, err := Copy(reqConn, targetConn.Conn)
+		_, err := io.Copy(reqConn, targetConn.Conn)
 		if err != nil && !activelyTimeOut {
 			errCH <- fmt.Errorf("relay data to server: %w", err)
 			return
@@ -445,6 +448,8 @@ func (r *Relay) relay(targetConn *Connection, reqConn net.Conn) error {
 	if err != nil {
 		return err
 	}
+
+	// reset read deadline to avoid read timeout
 	targetConn.Conn.SetReadDeadline(time.Time{})
 
 	go func() {

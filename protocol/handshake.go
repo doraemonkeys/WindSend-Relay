@@ -32,9 +32,16 @@ func handshakeECDH(req HandshakeReq) (ecdhPublicKey *ecdh.PublicKey, shared auth
 	return sk.PublicKey(), auth.HashToAES192Key(sharedSecret), nil
 }
 
-func handleHandshakeReq(req HandshakeReq, auther *auth.Authentication) (resp *HandshakeResp, shared auth.AES192Key, authKey auth.AES192Key, err error) {
-	// var authKey auth.AES192Key
-	if auther != nil {
+func handleHandshakeReq(req HandshakeReq, auther *auth.Authentication, noAuth bool) (resp *HandshakeResp, shared auth.AES192Key, authKey auth.AES192Key, err error) {
+	if req.AuthFieldB64 != "" && auther == nil {
+		// Relay server has no configured keys, but the client sent an authentication message
+		return nil, nil, nil, fmt.Errorf("invalid handshake request: invalid auth field")
+	}
+	if !noAuth && req.AuthFieldB64 == "" {
+		return nil, nil, nil, fmt.Errorf("invalid handshake request: no auth field")
+	}
+	// As long as AuthFieldB64 is not empty, authentication is performed
+	if req.AuthFieldB64 != "" && auther != nil {
 		authField, err := base64.StdEncoding.DecodeString(req.AuthFieldB64)
 		if err != nil {
 			return nil, nil, nil, fmt.Errorf("failed to decode auth field: %w", err)
@@ -68,12 +75,12 @@ func handleHandshakeReq(req HandshakeReq, auther *auth.Authentication) (resp *Ha
 }
 
 // nil auther means no authentication,return nil authKey
-func Handshake(conn net.Conn, auther *auth.Authentication) (cipher crypto.SymmetricCipher, authKey auth.AES192Key, err error) {
+func Handshake(conn net.Conn, auther *auth.Authentication, noAuth bool) (cipher crypto.SymmetricCipher, authKey auth.AES192Key, err error) {
 	req, err := ReadHandshakeReq(conn)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to read handshake request: %w", err)
 	}
-	resp, sharedKey, authKey, err := handleHandshakeReq(req, auther)
+	resp, sharedKey, authKey, err := handleHandshakeReq(req, auther, noAuth)
 	if err != nil {
 		_ = SendHandshakeResp(conn, HandshakeResp{
 			Code: StatusAuthFailed,
