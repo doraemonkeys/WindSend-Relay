@@ -45,11 +45,11 @@ type Connection struct {
 	Mu         sync.Mutex
 }
 
-func (c *Connection) DetectAlive(useLock bool) (alive bool) {
-	if useLock {
-		c.Mu.Lock()
-		defer c.Mu.Unlock()
-	}
+// Be careful of deadlocks
+func (c *Connection) SendMsgDetectAlive() (alive bool) {
+
+	c.Mu.Lock()
+	defer c.Mu.Unlock()
 
 	l := zap.L().With(zap.String("id", c.ID), zap.String("addr", c.Conn.RemoteAddr().String()))
 
@@ -212,7 +212,7 @@ func (r *Relay) handleConnect(conn net.Conn, head protocol.ReqHead, cipher crypt
 	{
 		if c, ok := r.connections[req.ID]; ok {
 			r.connectionsMu.RUnlock()
-			if c.DetectAlive(true) {
+			if c.Relaying || c.SendMsgDetectAlive() {
 				zap.L().Error("Connection already exists", zap.String("id", req.ID))
 				err = protocol.SendRespHeadError(conn, protocol.ActionConnect, "Connection already exists", cipher)
 				if err != nil {
@@ -302,6 +302,7 @@ func (r *Relay) AddConnection(id string, conn net.Conn, authKey auth.AES192Key, 
 }
 
 func (r *Relay) RemoveLongConnection(id string) {
+	zap.L().Debug("Remove long connection", zap.String("id", id))
 	r.connectionsMu.Lock()
 	c := r.removeConnection(id)
 	r.connectionsMu.Unlock()
@@ -429,6 +430,11 @@ func (r *Relay) relay(targetConn *Connection, reqConn net.Conn) error {
 	}()
 	go func() {
 		_, err := io.Copy(reqConn, targetConn.Conn)
+		if !activelyTimeOut {
+			// reqConn.SetReadDeadline(time.Unix(1136142245, 0))
+			errCH <- fmt.Errorf("relay dst active disconnect")
+			return
+		}
 		if err != nil && !activelyTimeOut {
 			errCH <- fmt.Errorf("relay data to server: %w", err)
 			return
@@ -454,7 +460,7 @@ func (r *Relay) relay(targetConn *Connection, reqConn net.Conn) error {
 
 	go func() {
 		// zap.L().Debug("try to read relay end flag")
-		alive := targetConn.DetectAlive(false)
+		alive := targetConn.SendMsgDetectAlive()
 		if alive {
 			zap.L().Debug("read relay end flag success")
 		} else {
