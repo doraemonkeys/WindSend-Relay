@@ -110,9 +110,6 @@ docker run -d \
   --name ws-relay \
   -p 16779:16779 \
   -e WS_MAX_CONN="100" \
-  -e WS_ENABLE_AUTH="true" \
-  -e WS_SECRET_0_KEY="1234" \
-  -e WS_SECRET_0_MAX_CONN="5" \
   doraemonkey/windsend-relay:latest
 ```
 **Run with Docker Compose**
