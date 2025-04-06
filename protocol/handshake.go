@@ -32,8 +32,8 @@ func handshakeECDH(req HandshakeReq) (ecdhPublicKey *ecdh.PublicKey, shared auth
 	return sk.PublicKey(), auth.HashToAES192Key(sharedSecret), nil
 }
 
-func handleHandshakeReq(req HandshakeReq, auther *auth.Authentication, enableAuth bool) (resp *HandshakeResp, shared auth.AES192Key, authKey auth.AES192Key, err error) {
-	if req.AuthFieldB64 != "" && auther == nil {
+func handleHandshakeReq(req HandshakeReq, authenticator *auth.Authentication, enableAuth bool) (resp *HandshakeResp, shared auth.AES192Key, authKey auth.AES192Key, err error) {
+	if req.AuthFieldB64 != "" && authenticator == nil {
 		// Relay server has no configured keys, but the client sent an authentication message
 		return nil, nil, nil, fmt.Errorf("invalid handshake request: invalid auth field")
 	}
@@ -45,12 +45,12 @@ func handleHandshakeReq(req HandshakeReq, auther *auth.Authentication, enableAut
 		return nil, nil, nil, fmt.Errorf("invalid handshake request: no auth aad")
 	}
 	// As long as AuthFieldB64 is not empty, authentication is performed
-	if req.AuthFieldB64 != "" && auther != nil {
+	if req.AuthFieldB64 != "" && authenticator != nil {
 		authField, err := base64.StdEncoding.DecodeString(req.AuthFieldB64)
 		if err != nil {
 			return nil, nil, nil, fmt.Errorf("failed to decode auth field: %w", err)
 		}
-		ok, key := auther.Auth(req.SecretKeySelector, authField, []byte(req.AuthAAD))
+		ok, key := authenticator.Auth(req.SecretKeySelector, authField, []byte(req.AuthAAD))
 		if !ok {
 			return nil, nil, nil, fmt.Errorf("failed to authenticate")
 		}
@@ -78,13 +78,13 @@ func handleHandshakeReq(req HandshakeReq, auther *auth.Authentication, enableAut
 	}, shared, authKey, nil
 }
 
-// nil auther means no authentication,return nil authKey
-func Handshake(conn net.Conn, auther *auth.Authentication, enableAuth bool) (cipher crypto.SymmetricCipher, authKey auth.AES192Key, err error) {
+// nil authenticator means no authentication,return nil authKey
+func Handshake(conn net.Conn, authenticator *auth.Authentication, enableAuth bool) (cipher crypto.SymmetricCipher, authKey auth.AES192Key, err error) {
 	req, err := ReadHandshakeReq(conn)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to read handshake request: %w", err)
 	}
-	resp, sharedKey, authKey, err := handleHandshakeReq(req, auther, enableAuth)
+	resp, sharedKey, authKey, err := handleHandshakeReq(req, authenticator, enableAuth)
 	if err != nil {
 		_ = SendHandshakeResp(conn, HandshakeResp{
 			Code: StatusAuthFailed,

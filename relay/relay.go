@@ -20,7 +20,7 @@ import (
 type Relay struct {
 	config config.Config
 	// nil when no secret keys
-	auther *auth.Authentication
+	authenticator *auth.Authentication
 	// enableAuth    bool
 
 	// ID -> Connection
@@ -99,19 +99,19 @@ func NewRelay(config config.Config) *Relay {
 			limit int
 		}{count: atomic.Int32{}, limit: secret.MaxConn}
 	}
-	auther := auth.NewAuthentication(secretKeys)
+	at := auth.NewAuthentication(secretKeys)
 	if len(secretKeys) == 0 {
 		zap.L().Warn("No secret keys, authentication is disabled")
-		auther = nil
+		at = nil
 	}
 	if config.EnableAuth && len(secretKeys) == 0 {
 		zap.L().Fatal("Enable authentication but no secret keys")
 	}
 	return &Relay{
-		config:       config,
-		auther:       auther,
-		keyConnLimit: connLimit,
-		connections:  make(map[string]*Connection),
+		config:        config,
+		authenticator: at,
+		keyConnLimit:  connLimit,
+		connections:   make(map[string]*Connection),
 	}
 }
 
@@ -134,7 +134,7 @@ func (r *Relay) Run() {
 }
 
 func (r *Relay) mainProcess(conn net.Conn) {
-	cipher, authKey, err := protocol.Handshake(conn, r.auther, r.config.EnableAuth)
+	cipher, authKey, err := protocol.Handshake(conn, r.authenticator, r.config.EnableAuth)
 	if err != nil {
 		zap.L().Info("request handshake failed", zap.Error(err))
 		_ = conn.Close()
@@ -165,7 +165,7 @@ func (r *Relay) checkConnLimit(key string) bool {
 	v, ok := r.keyConnLimit[key]
 	r.keyConnLimitMu.RUnlock()
 	if !ok {
-		if r.auther != nil {
+		if r.authenticator != nil {
 			panic("unknown key: " + key)
 		}
 		return true
@@ -325,7 +325,7 @@ func (r *Relay) addKeyConnCount(key string, add int32) (new int32) {
 	v, ok := r.keyConnLimit[key]
 	r.keyConnLimitMu.RUnlock()
 	if !ok {
-		if r.auther != nil {
+		if r.authenticator != nil {
 			panic("unknown key: " + key)
 		}
 		v = &struct {

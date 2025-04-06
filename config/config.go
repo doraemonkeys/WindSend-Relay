@@ -32,7 +32,6 @@ func ParseConfig() *Config {
 	var config Config
 	flag.StringVar(&config.ListenAddr, "listen-addr", "0.0.0.0:16779", "listen address")
 	flag.IntVar(&config.MaxConn, "max-conn", 100, "max connection")
-	flag.BoolVar(&config.EnableAuth, "enable-auth", false, "enable auth")
 	// flag.StringVar(&config.LogLevel, "log-level", "INFO", "log level")
 	showVersion := flag.Bool("version", false, "show version")
 	flag.Parse()
