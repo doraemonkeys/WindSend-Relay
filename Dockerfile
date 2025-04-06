@@ -1,5 +1,6 @@
 # Stage 1: Build the application
-FROM golang:1.21-alpine AS builder
+# FROM golang:1.21-alpine AS builder
+FROM golang:alpine AS builder
 
 # Set necessary environment variables
 ENV CGO_ENABLED=0 GOOS=linux GOARCH=amd64
@@ -20,10 +21,9 @@ COPY . .
 # Get version information (allow overriding via build args)
 ARG BUILD_HASH="unknown"
 ARG BUILD_TIME="unknown"
-# Attempt to get git hash if building locally in a git repo and not overridden
-RUN apk add --no-cache git && \
-    BUILD_HASH=$(git rev-parse --short HEAD || echo "unknown") && \
-    BUILD_TIME=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
+
+RUN echo "BUILD_HASH: ${BUILD_HASH}"
+RUN echo "BUILD_TIME: ${BUILD_TIME}"
 
 # Build the application statically linked
 # Inject version information using ldflags
@@ -52,9 +52,6 @@ EXPOSE 16779
 # Set default environment variables (can be overridden at runtime)
 # Consistent with your code's defaults or common container practice
 ENV WS_LISTEN_ADDR="0.0.0.0:16779"
-# Add other ENVs here if you prefer env-based config by default
-ENV WS_NO_AUTH=true
-#ENV WS_MAX_CONN=100
 
 # Command to run the application
 # Use --use-env as the default for containerized environments

@@ -21,7 +21,7 @@ type Config struct {
 	MaxConn     int          `json:"max_conn" env:"WS_MAX_CONN" envDefault:"100"`
 	IDWhitelist []string     `json:"id_whitelist" envPrefix:"WS_ID_WHITELIST"`
 	SecretInfo  []SecretInfo `json:"secret_info" envPrefix:"WS_SECRET"`
-	NoAuth      bool         `json:"no_auth" env:"WS_NO_AUTH" envDefault:"false"`
+	EnableAuth  bool         `json:"enable_auth" env:"WS_ENABLE_AUTH" envDefault:"false"`
 	// LogLevel    string       `json:"log_level" env:"WS_LOG_LEVEL" envDefault:"INFO"`
 }
 
@@ -32,7 +32,7 @@ func ParseConfig() *Config {
 	var config Config
 	flag.StringVar(&config.ListenAddr, "listen-addr", "0.0.0.0:16779", "listen address")
 	flag.IntVar(&config.MaxConn, "max-conn", 100, "max connection")
-	flag.BoolVar(&config.NoAuth, "no-auth", false, "allow all connections")
+	flag.BoolVar(&config.EnableAuth, "enable-auth", false, "enable auth")
 	// flag.StringVar(&config.LogLevel, "log-level", "INFO", "log level")
 	showVersion := flag.Bool("version", false, "show version")
 	flag.Parse()

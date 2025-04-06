@@ -104,7 +104,7 @@ func NewRelay(config config.Config) *Relay {
 		zap.L().Warn("No secret keys, authentication is disabled")
 		auther = nil
 	}
-	if !config.NoAuth && len(secretKeys) == 0 {
+	if config.EnableAuth && len(secretKeys) == 0 {
 		zap.L().Fatal("Enable authentication but no secret keys")
 	}
 	return &Relay{
@@ -134,7 +134,7 @@ func (r *Relay) Run() {
 }
 
 func (r *Relay) mainProcess(conn net.Conn) {
-	cipher, authKey, err := protocol.Handshake(conn, r.auther, r.config.NoAuth)
+	cipher, authKey, err := protocol.Handshake(conn, r.auther, r.config.EnableAuth)
 	if err != nil {
 		zap.L().Error("Failed to handshake", zap.Error(err))
 		_ = conn.Close()

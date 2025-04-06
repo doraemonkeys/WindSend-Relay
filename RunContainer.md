@@ -5,10 +5,9 @@
     docker run -d --name relay \
       -p 16779:16779 \
       -e WS_LISTEN_ADDR="0.0.0.0:16779" \
-      -e WS_NO_AUTH="true" \
+      -e WS_ENABLE_AUTH="false" \
       -e WS_MAX_CONN="200" \
-      # For WS_SECRET_KEY / WS_SECRET_MAX_CONN / WS_ID_WHITELIST_*
-      # you'll need to set them according to 'caarlos0/env' rules
+
       # e.g., for SecretInfo:
       # -e WS_SECRET_0_KEY="somekey" -e WS_SECRET_0_MAX_CONN="10"
       # -e WS_SECRET_1_KEY="anotherkey" -e WS_SECRET_1_MAX_CONN="5"
@@ -24,7 +23,7 @@
     {
       "listen_addr": "0.0.0.0:16779",
       "max_conn": 150,
-      "no_auth": false,
+      "enable_auth": false,
       "secret_info": [
         { "secret_key": "mysecret", "max_conn": 10 }
       ],
@@ -44,7 +43,7 @@
     ```bash
     docker run -d --name relay \
       -p 16779:16779 \
-      windsend-relay:latest --listen-addr 0.0.0.0:16779 --no-auth --max-conn 50
+      windsend-relay:latest --listen-addr 0.0.0.0:16779 --max-conn 50
     ```
 
 
@@ -64,7 +63,7 @@ services:
     environment:
       # --- Basic Configuration ---
       WS_MAX_CONN: "100"              # Overall max connections (adjust as needed)
-      WS_NO_AUTH: "false"             # Set to "true" to disable authentication
+      WS_ENABLE_AUTH: "false"         # Set to "true" to enable authentication
 
       # --- Authentication & Whitelisting ---
       # Configure EITHER SecretInfo OR IDWhitelist based on your needs.
