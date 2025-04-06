@@ -110,6 +110,9 @@ docker run -d \
   --name ws-relay \
   -p 16779:16779 \
   -e WS_MAX_CONN="100" \
+  -e WS_ENABLE_AUTH="true" \
+  -e WS_SECRET_0_KEY="1234" \
+  -e WS_SECRET_0_MAX_CONN="5" \
   doraemonkey/windsend-relay:latest
 ```
 **Run with Docker Compose**
@@ -176,6 +179,7 @@ WindSend-Relay can be configured using three methods, with the following order o
 | Config File     | *N/A*          | `-config`      | *N/A*                                         | `string`       | `""`            | Path to a JSON configuration file. If set, other flags (except `-version`) are ignored. |
 | Use Environment | *N/A*          | `-use-env`     | *N/A*                                         | `bool`         | `false`         | If `true`, configuration is read from environment variables. Other flags (except `-version`) are ignored. |
 | Show Version    | *N/A*          | `-version`     | *N/A*                                         | `bool`         | `false`         | Print version information and exit.                          |
+| Log Level      | *N/A*          | `-log-level`   | `WS_LOG_LEVEL`                                | `string`       | `INFO`          | Log level. Valid values: `DEBUG`, `INFO`, `WARN`, `ERROR`, `DPANIC`, `PANIC`, `FATAL`. |
 
 **Note:** In `v0.1.0` and later versions, the command line flag `-enable-auth` has been removed. Please use the environment variable `WS_ENABLE_AUTH` or the JSON configuration `enable_auth` to control it.
 

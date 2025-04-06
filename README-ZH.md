@@ -167,7 +167,8 @@ WindSend-Relay 可以通过以下三种方式进行配置，优先级顺序如�
 | 启用身份验证 | `enable_auth`  | *N/A*          | `WS_ENABLE_AUTH`                              | `bool`         | `false`         | 如果为 `true`，客户端必须使用 `Secret Info` 中的有效密钥进行身份验证。 |
 | 配置文件路径 | *N/A*          | `-config`      | *N/A*                                         | `string`       | `""`            | JSON 配置文件的路径。如果设置，除 `-version` 外的其他标志将被忽略。 |
 | 使用环境变量 | *N/A*          | `-use-env`     | *N/A*                                         | `bool`         | `false`         | 如果为 `true`，则从环境变量读取配置。除 `-version` 外的其他标志将被忽略。 |
-| 显示版本     | *N/A*          | `-version`     | *N/A*                                         | `bool`         | `false`         | 打印版本信息并退出。                                         |
+| 显示版本     | *N/A*          | `-version`     | *N/A*                                         | `bool`         | `false`         | 打印版本信息并退出。  
+| 日志级别     | *N/A*          | `-log-level`   | `WS_LOG_LEVEL`                                | `string`       | `INFO`          | 日志级别。有效值：`DEBUG`, `INFO`, `WARN`, `ERROR`, `DPANIC`, `PANIC`, `FATAL`。 |
 
 **注意：** 在 `v0.1.0` 及之后版本中，命令行标志 `-enable-auth` 已被移除，请使用环境变量 `WS_ENABLE_AUTH` 或 JSON 配置 `enable_auth` 来控制。
 
