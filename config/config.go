@@ -4,11 +4,11 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"log"
 	"os"
 
 	"github.com/caarlos0/env/v11"
 	"github.com/doraemonkeys/WindSend-Relay/version"
-	"go.uber.org/zap"
 )
 
 type SecretInfo struct {
@@ -22,7 +22,7 @@ type Config struct {
 	IDWhitelist []string     `json:"id_whitelist" envPrefix:"WS_ID_WHITELIST"`
 	SecretInfo  []SecretInfo `json:"secret_info" envPrefix:"WS_SECRET"`
 	EnableAuth  bool         `json:"enable_auth" env:"WS_ENABLE_AUTH" envDefault:"false"`
-	// LogLevel    string       `json:"log_level" env:"WS_LOG_LEVEL" envDefault:"INFO"`
+	LogLevel    string       `json:"log_level" env:"WS_LOG_LEVEL" envDefault:"INFO"`
 }
 
 func ParseConfig() *Config {
@@ -31,8 +31,8 @@ func ParseConfig() *Config {
 
 	var config Config
 	flag.StringVar(&config.ListenAddr, "listen-addr", "0.0.0.0:16779", "listen address")
-	flag.IntVar(&config.MaxConn, "max-conn", 100, "max connection")
-	// flag.StringVar(&config.LogLevel, "log-level", "INFO", "log level")
+	// flag.IntVar(&config.MaxConn, "max-conn", 100, "max connection")
+	flag.StringVar(&config.LogLevel, "log-level", "INFO", "log level")
 	showVersion := flag.Bool("version", false, "show version")
 	flag.Parse()
 
@@ -50,7 +50,7 @@ func ParseConfig() *Config {
 	if *configFile != "" {
 		jsonFile, err := os.Open(*configFile)
 		if err != nil {
-			zap.L().Error("Failed to open config file", zap.Error(err))
+			log.Fatal("Failed to open config file", err)
 		}
 		defer jsonFile.Close()
 
@@ -63,7 +63,7 @@ func ParseConfig() *Config {
 func parseEnv() *Config {
 	var config, err = env.ParseAs[Config]()
 	if err != nil {
-		zap.L().Error("Failed to parse env", zap.Error(err))
+		log.Fatal("Failed to parse env", err)
 	}
 	return &config
 }

@@ -116,6 +116,8 @@ func NewRelay(config config.Config) *Relay {
 }
 
 func (r *Relay) Run() {
+	zap.L().Info("Relay server start")
+
 	go r.detectConnectionAlive()
 
 	listener, err := net.Listen("tcp", r.config.ListenAddr)
