@@ -255,7 +255,7 @@ func (r *Relay) handleConnect(conn net.Conn, head protocol.ReqHead, cipher crypt
 
 func (r *Relay) detectConnectionAlive() {
 	for {
-		time.Sleep(time.Second * 30)
+		time.Sleep(time.Second * 60)
 		if len(r.connections) == 0 {
 			continue
 		}
