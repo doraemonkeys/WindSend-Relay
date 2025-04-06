@@ -192,13 +192,3 @@ WindSend-Relay 可以通过以下三种方式进行配置，优先级顺序如�
 
 欢迎贡献！请随时在 [GitHub 仓库](https://github.com/doraemonkeys/WindSend-Relay) 提交拉取请求 (Pull Request) 或开启问题 (Issue)。
 
-**Key Changes Made During Translation:**
-
-1.  **Language Switcher:** Updated the header to point to `README.md` for English and indicate the current language is 简体中文.
-2.  **Headings and Descriptions:** Translated all section headings and descriptive text into simplified Chinese.
-3.  **Technical Terms:** Kept technical terms like `Docker`, `Go`, `JSON`, `YAML`, command names (`git clone`, `go build`, `./windsend-relay`, `docker pull`, `docker run`), flags (`-config`, `-use-env`, `-max-conn`, `-version`), environment variables (`WS_LISTEN_ADDR`, etc.), and JSON keys (`listen_addr`, etc.) in their original English form for clarity and consistency with the code/commands.
-4.  **Code Blocks:** Preserved code blocks (Bash, JSON, YAML) exactly as they were, only translating the comments within them where appropriate.
-5.  **Configuration Table:** Translated the "Parameter" and "Description" columns. Kept other columns largely in English (Type, Default, Flag, Env Var, JSON Key) as they refer to specific technical identifiers. Added a note about the removal of the `-enable-auth` flag based on the Go code (it's commented out in the `flag` definitions but present in the `Config` struct and handled by JSON/Env).
-6.  **Contextual Notes:** Added minor clarifications where helpful (e.g., Go version requirement).
-7.  **Links:** Kept all URLs unchanged.
-8.  **Formatting:** Maintained the original Markdown formatting.

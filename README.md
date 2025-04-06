@@ -177,6 +177,8 @@ WindSend-Relay can be configured using three methods, with the following order o
 | Use Environment | *N/A*          | `-use-env`     | *N/A*                                         | `bool`         | `false`         | If `true`, configuration is read from environment variables. Other flags (except `-version`) are ignored. |
 | Show Version    | *N/A*          | `-version`     | *N/A*                                         | `bool`         | `false`         | Print version information and exit.                          |
 
+**Note:** In `v0.1.0` and later versions, the command line flag `-enable-auth` has been removed. Please use the environment variable `WS_ENABLE_AUTH` or the JSON configuration `enable_auth` to control it.
+
 **Notes on Environment Variables for Slices:**
 
 *   **`WS_ID_WHITELIST_<n>`:** For the ID whitelist, use indexed variables starting from 0. Example:
