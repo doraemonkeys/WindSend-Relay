@@ -136,7 +136,7 @@ func (r *Relay) Run() {
 func (r *Relay) mainProcess(conn net.Conn) {
 	cipher, authKey, err := protocol.Handshake(conn, r.auther, r.config.EnableAuth)
 	if err != nil {
-		zap.L().Error("Failed to handshake", zap.Error(err))
+		zap.L().Info("request handshake failed", zap.Error(err))
 		_ = conn.Close()
 		return
 	}
