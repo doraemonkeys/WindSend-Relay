@@ -355,7 +355,6 @@ func (r *Relay) handleRelay(conn net.Conn, head protocol.ReqHead, cipher crypto.
 	defer conn.Close()
 
 	l := zap.L().With(zap.String("Action", "Relay"), zap.String("ReqAddr", conn.RemoteAddr().String()))
-	l.Info("Relay request")
 	req, err := protocol.ReadReq[protocol.RelayReq](conn, head.DataLen, cipher)
 	if err != nil {
 		l.Error("Failed to read relay request", zap.Error(err))
@@ -376,6 +375,7 @@ func (r *Relay) handleRelay(conn net.Conn, head protocol.ReqHead, cipher crypto.
 		}
 		return
 	}
+	// Simple processing, if targetConn is relaying, return an error
 	if targetConn.Relaying {
 		l.Error("Connection is already relaying")
 		err := protocol.SendRespHeadError(conn, protocol.ActionRelay, "Connection is already relaying", cipher)
