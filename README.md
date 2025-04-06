@@ -8,7 +8,7 @@
 
 
 
-WindSend-Relay is a Go implementation of the [WindSend](https://github.com/doraemonkeys/WindSend) Relay server.
+WindSend-Relay is a Go implementation of the [WindSend](https://github.com/doraemonkeys/WindSend) Relay server. WindSend uses TLS certificates for authentication and encrypts the relay traffic, ensuring data security even when using third-party relay servers.
 
 
 

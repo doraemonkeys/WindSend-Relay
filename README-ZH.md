@@ -6,7 +6,7 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/doraemonkeys/WindSend-Relay)](https://goreportcard.com/report/github.com/doraemonkeys/WindSend-Relay)
 [![LICENSE](https://img.shields.io/github/license/doraemonkeys/WindSend-Relay)](https://github.com/doraemonkeys/WindSend-Relay/blob/main/LICENSE)
 
-WindSend-Relay 是 [WindSend](https://github.com/doraemonkeys/WindSend) 中继服务器的 Go 语言实现。
+WindSend-Relay 是 [WindSend](https://github.com/doraemonkeys/WindSend) 中继服务器的 Go 语言实现，WindSend 使用 TLS 证书认证并对中转流量进行加密，即使使用第三方中继服务器，也能保证数据安全。
 
 ## 安装
 
