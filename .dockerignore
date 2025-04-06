@@ -1,0 +1,28 @@
+# Git files
+.git/
+.gitignore
+
+# Docker files
+Dockerfile
+.dockerignore
+
+# Go build artifacts / OS specific
+*.exe
+*.test
+dist/
+
+# Logs
+logs/
+config/logs/
+*.log
+*.error.log
+
+# Editor/IDE files
+.vscode/
+*~
+
+# Secrets or local configs not meant for image
+config.json
+
+# Local dependencies (if any, though go modules handle this)
+# vendor/

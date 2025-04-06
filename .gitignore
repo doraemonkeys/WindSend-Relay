@@ -27,3 +27,4 @@ go.work.sum
 *.log
 gitignore*
 dist/*
+config.json
