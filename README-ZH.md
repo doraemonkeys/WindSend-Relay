@@ -137,6 +137,10 @@ services:
     # 可选：如果您需要在容器外部持久化日志，请添加卷
     # volumes:
     #   - ./logs:/app/logs
+    #   - ./config.json:/app/config.json
+
+    # 可选：使用配置文件代替环境变量
+    # command: ["/app/windsend-relay", "-config", "/app/config.json"]
 ```
 
 **获取版本信息:**

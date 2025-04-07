@@ -142,6 +142,10 @@ services:
     # Optional: Add volumes if you need persistent logs outside the container
     # volumes:
     #   - ./logs:/app/logs
+    #   - ./config.json:/app/config.json
+
+    # Optional: use config file instead of env vars
+    # command: ["/app/windsend-relay", "-config", "/app/config.json"]
 ```
 
 
