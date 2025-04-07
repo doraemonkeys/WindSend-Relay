@@ -107,7 +107,7 @@ docker run -d \
 ```yaml
 services:
   windsend-relay:
-    image: windsend-relay:latest # 或者 doraemonkey/windsend-relay:latest
+    image: doraemonkey/windsend-relay:latest
     container_name: windsend-relay-app
     restart: unless-stopped
     ports:
