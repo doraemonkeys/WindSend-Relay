@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"math/rand/v2"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -47,6 +48,14 @@ type Connection struct {
 
 // Be careful of deadlocks
 func (c *Connection) SendMsgDetectAlive() (alive bool) {
+
+	c.Mu.Lock()
+	defer c.Mu.Unlock()
+
+	return c.sendMsgDetectAlive()
+}
+
+func (c *Connection) sendMsgDetectAlive() (alive bool) {
 
 	c.Mu.Lock()
 	defer c.Mu.Unlock()
@@ -271,21 +280,40 @@ func (r *Relay) detectConnectionAlive() {
 
 		for _, c := range connections {
 			if c.Relaying {
+				if c.LastActive.Add(time.Hour * 6).Before(time.Now()) {
+					zap.L().Error("unexpected: connection is relaying and timeout", zap.String("id", c.ID),
+						zap.String("addr", c.Conn.RemoteAddr().String()))
+					r.RemoveLongConnection(c.ID)
+				}
 				continue
 			}
-			c.Mu.Lock()
-			err := protocol.SendHeartbeatNoResp(c.Conn, c.Cipher)
+			err := c.detectAliveRandom()
 			if err != nil {
-				zap.L().Info("detect connection alive failed", zap.Error(err), zap.String("id", c.ID),
-					zap.String("addr", c.Conn.RemoteAddr().String()))
+				zap.L().Info("detect connection alive failed", zap.Error(err),
+					zap.String("id", c.ID), zap.String("addr", c.Conn.RemoteAddr().String()))
 				r.RemoveLongConnection(c.ID)
-			} else {
-				c.LastActive = time.Now()
 			}
-			c.Mu.Unlock()
 		}
-
 	}
+}
+
+func (c *Connection) detectAliveRandom() error {
+	var err error
+	c.Mu.Lock()
+	defer c.Mu.Unlock()
+
+	if rand.IntN(10) == 0 {
+		ok := c.sendMsgDetectAlive()
+		if !ok {
+			return fmt.Errorf("detect failed")
+		}
+	}
+	err = protocol.SendHeartbeatNoResp(c.Conn, c.Cipher)
+	if err != nil {
+		return err
+	}
+	c.LastActive = time.Now()
+	return nil
 }
 
 func (r *Relay) AddConnection(id string, conn net.Conn, authKey auth.AES192Key, cipher crypto.SymmetricCipher) {
