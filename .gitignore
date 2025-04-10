@@ -28,3 +28,4 @@ go.work.sum
 gitignore*
 dist/*
 config.json
+release_docker2.sh

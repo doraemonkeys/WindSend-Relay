@@ -25,7 +25,7 @@ fi
 
 {
     echo "## What's Changed"
-    git log --pretty=format:"* %h %s by %an@" --grep="^feat" -i "$version_range" | sort -f | uniq
+    git log --pretty=format:"* %h %s by %an@" --grep="^feat\|^perf" -i "$version_range" | sort -f | uniq
     echo ""
     echo "## BUG & Fix"
     git log --pretty=format:"* %h %s by %an@" --grep="^fix" -i "$version_range" | sort -f | uniq
