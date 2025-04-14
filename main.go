@@ -4,13 +4,15 @@ import (
 	"github.com/doraemonkeys/WindSend-Relay/config"
 	"github.com/doraemonkeys/WindSend-Relay/global"
 	"github.com/doraemonkeys/WindSend-Relay/relay"
+	"github.com/doraemonkeys/WindSend-Relay/storage"
 )
 
 func main() {
-	config := config.ParseConfig()
+	cfg := config.ParseConfig()
+	global.InitLogger(cfg.LogLevel)
 
-	global.InitLogger(config.LogLevel)
+	storage := storage.NewStorage(config.DBPath)
+	relay := relay.NewRelay(*cfg, storage)
 
-	relay := relay.NewRelay(*config)
 	relay.Run()
 }

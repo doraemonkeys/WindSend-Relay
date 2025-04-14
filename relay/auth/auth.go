@@ -6,28 +6,27 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/doraemonkeys/WindSend-Relay/tool"
 	"github.com/doraemonkeys/doraemon"
 	"github.com/doraemonkeys/doraemon/crypto"
 	"go.uber.org/zap"
 )
 
-type AES192Key []byte
-
 type Authentication struct {
 	RawKeyList   []string
-	KeySelectors map[string][]AES192Key
+	KeySelectors map[string][]tool.AES192Key
 	selectorMu   sync.RWMutex
 }
 
 func NewAuthentication(keys []string) *Authentication {
 	zap.L().Info("Server secret key count", zap.Int("count", len(keys)))
-	selectors := make(map[string][]AES192Key, len(keys))
+	selectors := make(map[string][]tool.AES192Key, len(keys))
 	for i, key := range keys {
-		aesKey := HashToAES192Key([]byte(key))
+		aesKey := tool.HashToAES192Key([]byte(key))
 		selector := getAES192KeySelector(aesKey)
 		ks, ok := selectors[selector]
 		if !ok {
-			ks = make([]AES192Key, 0, 1)
+			ks = make([]tool.AES192Key, 0, 1)
 		}
 		for _, k := range ks {
 			if bytes.Equal(k, aesKey) {
@@ -44,19 +43,8 @@ func NewAuthentication(keys []string) *Authentication {
 	}
 }
 
-func HashToAES192Key(c []byte) AES192Key {
-	// if len(c) == 0 {
-	// 	panic("unreachable: Invalid input string")
-	// }
-	hash, err := doraemon.ComputeSHA256(bytes.NewReader(c))
-	if err != nil {
-		panic("unreachable")
-	}
-	return hash[:192/8]
-}
-
 // return 4 bytes hash prefix encoded in hex
-func getAES192KeySelector(key AES192Key) string {
+func getAES192KeySelector(key tool.AES192Key) string {
 	hash, err := doraemon.ComputeSHA256Hex(bytes.NewReader(key))
 	if err != nil {
 		panic("unreachable")
@@ -64,7 +52,7 @@ func getAES192KeySelector(key AES192Key) string {
 	return hash[:8]
 }
 
-func (a *Authentication) Auth(selector string, authField []byte, additionalData ...[]byte) (bool, AES192Key) {
+func (a *Authentication) Auth(selector string, authField []byte, additionalData ...[]byte) (bool, tool.AES192Key) {
 	a.selectorMu.RLock()
 	ks, ok := a.KeySelectors[selector]
 	a.selectorMu.RUnlock()

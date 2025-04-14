@@ -29,3 +29,5 @@ gitignore*
 dist/*
 config.json
 release_docker2.sh
+data/relay.db
+data/web

@@ -8,10 +8,11 @@ import (
 	"net"
 
 	"github.com/doraemonkeys/WindSend-Relay/relay/auth"
+	"github.com/doraemonkeys/WindSend-Relay/tool"
 	"github.com/doraemonkeys/doraemon/crypto"
 )
 
-func handshakeECDH(req HandshakeReq) (ecdhPublicKey *ecdh.PublicKey, shared auth.AES192Key, err error) {
+func handshakeECDH(req HandshakeReq) (ecdhPublicKey *ecdh.PublicKey, shared tool.AES192Key, err error) {
 	publicKey, err := base64.StdEncoding.DecodeString(req.EcdhPublicKeyB64)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to decode public key: %w", err)
@@ -29,10 +30,10 @@ func handshakeECDH(req HandshakeReq) (ecdhPublicKey *ecdh.PublicKey, shared auth
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to generate shared secret: %w", err)
 	}
-	return sk.PublicKey(), auth.HashToAES192Key(sharedSecret), nil
+	return sk.PublicKey(), tool.HashToAES192Key(sharedSecret), nil
 }
 
-func handleHandshakeReq(req HandshakeReq, authenticator *auth.Authentication, enableAuth bool) (resp *HandshakeResp, shared auth.AES192Key, authKey auth.AES192Key, err error) {
+func handleHandshakeReq(req HandshakeReq, authenticator *auth.Authentication, enableAuth bool) (resp *HandshakeResp, shared tool.AES192Key, authKey tool.AES192Key, err error) {
 	if req.AuthFieldB64 != "" && authenticator == nil {
 		// Relay server has no configured keys, but the client sent an authentication message
 		return nil, nil, nil, fmt.Errorf("invalid handshake request: invalid auth field")
@@ -79,7 +80,7 @@ func handleHandshakeReq(req HandshakeReq, authenticator *auth.Authentication, en
 }
 
 // nil authenticator means no authentication,return nil authKey
-func Handshake(conn net.Conn, authenticator *auth.Authentication, enableAuth bool) (cipher crypto.SymmetricCipher, authKey auth.AES192Key, err error) {
+func Handshake(conn net.Conn, authenticator *auth.Authentication, enableAuth bool) (cipher crypto.SymmetricCipher, authKey tool.AES192Key, err error) {
 	req, err := ReadHandshakeReq(conn)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to read handshake request: %w", err)
