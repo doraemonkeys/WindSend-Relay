@@ -161,7 +161,7 @@ func (s Storage) getHistoryStatistic(page, pageSize int) ([]*model.RelayStatisti
 }
 
 func (s Storage) getHistoryStatisticBySort(page, pageSize int, sortBy string, sortType string) ([]*model.RelayStatistic, int64, error) {
-	fmt.Println("getHistoryStatisticBySort", page, pageSize, sortBy, sortType)
+	// fmt.Println("getHistoryStatisticBySort", page, pageSize, sortBy, sortType)
 	q := query.Use(s.db)
 	if !s.checkSortType(sortType) {
 		return nil, 0, errors.New("invalid sort type")

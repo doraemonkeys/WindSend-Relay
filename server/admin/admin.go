@@ -151,7 +151,11 @@ func (s *AdminServer) handleLogin(c *gin.Context) {
 		return
 	}
 	if username != s.cfg.User || !strings.EqualFold(password, ph) {
-		zap.L().Error("invalid username or password", zap.String("username", username), zap.String("password", password))
+		zap.L().Error("invalid username or password",
+			zap.String("username", username),
+			zap.String("password", password),
+			zap.String("addr", c.Request.RemoteAddr),
+		)
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"message": "invalid username or password",
 		})
