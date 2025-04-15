@@ -1,4 +1,5 @@
-name: Go Release
+# .github/workflows/release.yml
+name: Go Release with Frontend
 
 on:
   workflow_dispatch:
@@ -7,7 +8,7 @@ on:
       - "v*"
 
 env:
-  CARGO_TERM_COLOR: always
+  CARGO_TERM_COLOR: always # Note: This env var seems related to Rust/Cargo, not Go or Node. Maybe remove if not needed?
 
 jobs:
   build-linux:
@@ -17,22 +18,14 @@ jobs:
 
       - name: Fetch tags
         run: |
-          git fetch --tags || true
-          git tag --sort=-creatordate | head -n 1
+          git fetch --tags --force # Use --force to overwrite existing tags if necessary during fetch
+          echo "Latest tag: $(git tag --sort=-creatordate | head -n 1)"
 
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
           go-version: "stable"
-          cache-dependency-path: go/go.sum
-
-      - name: Display Go version
-        run: go version
-
-      - name: Install dependencies
-        working-directory: ./server
-        run: go get .
-
+          cache-dependency-path: server/go.sum
       - uses: actions/cache@v4
         with:
           path: |
@@ -42,7 +35,14 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-go-
 
-      - name: Run Build Script
+      - name: Display Go version
+        run: go version
+
+      - name: Install Go dependencies
+        working-directory: ./server
+        run: go mod download # Prefer go mod download or go work download over go get . for CI
+
+      - name: Run Backend Build Script (Linux)
         env:
           CI_RUNNING: true # for build script
         working-directory: ./server
@@ -50,16 +50,15 @@ jobs:
           chmod +x ./*.sh
           ./release.sh linux
 
-      - name: Archive artifacts
-        id: build_archive
+      - name: Archive Backend Artifacts (Linux)
         uses: actions/upload-artifact@v4
         with:
-          name: WindSend-Archives-linux
+          name: WindSend-Archives-linux # Artifact name per OS
           path: |
-            ./dist/*.zip
-            ./dist/*.txt
-            ./dist/*.gz
-            ./dist/*.apk
+            ./server/dist/*.zip
+            ./server/dist/*.txt
+            ./server/dist/*.gz
+            ./server/dist/*.apk
           if-no-files-found: error
 
   build-windows:
@@ -69,21 +68,14 @@ jobs:
 
       - name: Fetch tags
         run: |
-          git fetch --tags || true
-          git tag --sort=-creatordate | head -n 1
+          git fetch --tags --force
+          echo "Latest tag: $(git tag --sort=-creatordate | Select-Object -First 1)"
 
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
           go-version: "stable"
-          cache-dependency-path: go/go.sum
-
-      - name: Display Go version
-        run: go version
-
-      - name: Install dependencies
-        working-directory: ./server
-        run: go get .
+          cache-dependency-path: server/go.sum
 
       - uses: actions/cache@v4
         with:
@@ -94,28 +86,38 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-go-
 
+      - name: Display Go version
+        run: go version
+
+      - name: Install Go dependencies
+        working-directory: ./server
+        run: go mod download
+
       - uses: msys2/setup-msys2@v2
         with:
           update: true
           path-type: "inherit"
           install: >-
             zip
-      - name: Run Build Script
+
+      - name: Run Backend Build Script (Windows)
         shell: msys2 {0}
         env:
           CI_RUNNING: true # for build script
         working-directory: ./server
         run: |
+          # chmod +x ./*.sh
           ./release.sh windows
-      - name: Archive artifacts
-        id: build_archive
+
+      - name: Archive Backend Artifacts (Windows)
         uses: actions/upload-artifact@v4
         with:
           name: WindSend-Archives-windows
           path: |
-            ./dist/*.zip
-            ./dist/*.gz
+            ./server/dist/*.zip
+            ./server/dist/*.gz
           if-no-files-found: error
+
   build-macos:
     runs-on: macos-latest
     steps:
@@ -123,21 +125,14 @@ jobs:
 
       - name: Fetch tags
         run: |
-          git fetch --tags || true
-          git tag --sort=-creatordate | head -n 1
+          git fetch --tags --force
+          echo "Latest tag: $(git tag --sort=-creatordate | head -n 1)"
 
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
           go-version: "stable"
-          cache-dependency-path: go/go.sum
-
-      - name: Display Go version
-        run: go version
-
-      - name: Install dependencies
-        working-directory: ./server
-        run: go get .
+          cache-dependency-path: server/go.sum
 
       - uses: actions/cache@v4
         with:
@@ -148,7 +143,14 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-go-
 
-      - name: Run Build Script
+      - name: Display Go version
+        run: go version
+
+      - name: Install Go dependencies
+        working-directory: ./server
+        run: go mod download
+
+      - name: Run Backend Build Script (macOS)
         env:
           CI_RUNNING: true # for build script
         working-directory: ./server
@@ -156,19 +158,57 @@ jobs:
           chmod +x ./*.sh
           ./release.sh macos
 
-      - name: Archive artifacts
-        id: build_archive
+      - name: Archive Backend Artifacts (macOS)
         uses: actions/upload-artifact@v4
         with:
-          name: WindSend-Archives-macos
+          name: WindSend-Archives-macos # Artifact name per OS
           path: |
-            ./dist/*.zip
-            ./dist/*.gz
+            ./server/dist/*.zip
+            ./server/dist/*.gz
+          if-no-files-found: error
+
+  # --- Job for Vue Frontend ---
+  build-frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js v22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "npm" # Enable caching for npm
+          cache-dependency-path: relay_admin/package-lock.json # Or package.json if no lock file
+
+      - name: Display Node.js and npm versions
+        run: |
+          node -v
+          npm -v
+
+      - name: Install Frontend Dependencies
+        working-directory: ./relay_admin # Change to the frontend directory
+        run: npm ci # Use npm ci for faster, more reliable installs in CI
+
+      - name: Build Frontend
+        working-directory: ./relay_admin # Stay in the frontend directory
+        run: |
+          chmod +x ./*.sh
+          ./release.sh
+
+      - name: Archive Frontend Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: WindSend-Relay-Admin-Frontend # Specific name for frontend artifact
+          path: ./relay_admin/*.zip
           if-no-files-found: error
 
   release:
-    needs: [build-linux, build-windows, build-macos]
+    # Add build-frontend to the needs list
+    needs: [build-linux, build-windows, build-macos, build-frontend]
     runs-on: ubuntu-latest
+    # Permissions needed for softprops/action-gh-release to create a release
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -182,19 +222,22 @@ jobs:
           git fetch --tags
           echo "PREVERSION=$(git describe --tags --abbrev=0 $(git rev-list --tags --skip=1 --max-count=1))" >> $GITHUB_ENV
 
-      - name: Generate release notes
+      - name: Generate release notes body
         run: |
           cp ./.github/gen_release_note_from_commits.sh ./
           bash ./gen_release_note_from_commits.sh -v ${PREVERSION}...${CURRENTVERSION}
           rm ./gen_release_note_from_commits.sh
 
-      - name: Download artifacts
+      - name: Download all build artifacts
         uses: actions/download-artifact@v4
         with:
-          # name: WindSend-Archives-linux
-          path: ./Downloaded-Archives
-          merge-multiple: true
+          path: ./Downloaded-Archives # All artifacts (backends + frontend) will land here
+          merge-multiple: true # Crucial for downloading artifacts from different jobs into one dir
 
+      - name: List downloaded artifacts
+        run: ls -R ./Downloaded-Archives
+
+      # Debugging environment variables if needed
       - name: Echo env
         run: |
           echo 'ref ${{ github.ref }}'
@@ -210,6 +253,8 @@ jobs:
           echo 'job ${{ github.job }}'
           echo 'run_id ${{ github.run_id }}'
           echo 'run_number ${{ github.run_number }}'
+          echo 'CURRENTVERSION ${{ env.CURRENTVERSION }}'
+          echo 'PREVERSION ${{ env.PREVERSION }}'
 
       - name: Release
         uses: softprops/action-gh-release@v2
