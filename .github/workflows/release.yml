@@ -30,7 +30,7 @@ jobs:
         run: go version
 
       - name: Install dependencies
-        #working-directory: ./go
+        working-directory: ./server
         run: go get .
 
       - uses: actions/cache@v4
@@ -45,7 +45,7 @@ jobs:
       - name: Run Build Script
         env:
           CI_RUNNING: true # for build script
-        working-directory: ./
+        working-directory: ./server
         run: |
           chmod +x ./*.sh
           ./release.sh linux
@@ -82,7 +82,7 @@ jobs:
         run: go version
 
       - name: Install dependencies
-        #working-directory: ./go
+        working-directory: ./server
         run: go get .
 
       - uses: actions/cache@v4
@@ -104,7 +104,7 @@ jobs:
         shell: msys2 {0}
         env:
           CI_RUNNING: true # for build script
-        working-directory: ./
+        working-directory: ./server
         run: |
           ./release.sh windows
       - name: Archive artifacts
@@ -136,7 +136,7 @@ jobs:
         run: go version
 
       - name: Install dependencies
-        #working-directory: ./go
+        working-directory: ./server
         run: go get .
 
       - uses: actions/cache@v4
@@ -151,7 +151,7 @@ jobs:
       - name: Run Build Script
         env:
           CI_RUNNING: true # for build script
-        working-directory: ./
+        working-directory: ./server
         run: |
           chmod +x ./*.sh
           ./release.sh macos
