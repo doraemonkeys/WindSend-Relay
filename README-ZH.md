@@ -108,7 +108,7 @@ export WS_ADMIN_PASSWORD="a_very_secure_password_at_least_12_chars" # 至少12�
   "log_level": "INFO",
   "admin_config": {
     "user": "admin",
-    "password": "a_very_secure_password_at_least_12_chars", // 安全密码
+    "password": "a_very_secure_password_at_least_12_chars",
     "addr": "0.0.0.0:16780"
   }
 }
