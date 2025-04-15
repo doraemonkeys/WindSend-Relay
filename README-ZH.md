@@ -38,7 +38,7 @@ docker pull doraemonkey/windsend-relay:latest
 
     ```bash
     git clone https://github.com/doraemonkeys/WindSend-Relay.git
-    cd WindSend-Relay
+    cd WindSend-Relay/server
     ```
 
 
@@ -46,14 +46,14 @@ docker pull doraemonkey/windsend-relay:latest
 
     ```bash
     # 需要 Go 1.24+
+    cd WindSend-Relay/server
     go build -o windsend-relay
+    
+    cd ../relay_admin
+    npm install
+    npm run build
     ```
 
-3.  **运行可执行文件：**
-
-    ```bash
-    ./windsend-relay [flags]
-    ```
 
 ## 使用示例
 
