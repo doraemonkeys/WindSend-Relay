@@ -158,11 +158,11 @@ services:
       # --- 管理后台 Web 界面配置 ---
       WS_ADMIN_ADDR: "0.0.0.0:16780" # 管理后台 UI 的地址
       WS_ADMIN_USER: "admin"         # 管理后台用户名
-      WS_ADMIN_PASSWORD: "" # !!! 请修改此项 !!! 如果留空，首次启动时会生成一个随机密码并记录在日志中（至少12字符）。
+      WS_ADMIN_PASSWORD: "" # !!! 请修改此项 !!! 如果留空，首次启动时会生成一个随机密码并输出（至少12字符）。
 
     volumes:
       - ./logs:/app/logs
-      - ./data:/app/data # 包含 relay.db 和 web 静态文件
+      - ./data:/app/data # 包含 relay.db
       #- ./config.json:/app/config.json # 可选：使用配置文件代替环境变量
 
     # 可选：使用配置文件代替环境变量

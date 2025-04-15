@@ -13,6 +13,8 @@ echo "BUILD_TAG: ${BUILD_TAG}"
 echo "COMMIT_HASH: ${COMMIT_HASH}"
 echo "BUILD_TIME: ${BUILD_TIME}"
 
+cd server || exit 1
+
 docker build \
     --build-arg BUILD_HASH="${COMMIT_HASH}" \
     --build-arg BUILD_TIME="${BUILD_TIME}" \

@@ -13,7 +13,7 @@ import (
 )
 
 const DBPath = "data/relay.db"
-const WebStaticDir = "data/web"
+const WebStaticDir = "static/web"
 
 type SecretInfo struct {
 	SecretKey string `json:"secret_key" env:"KEY,notEmpty"`

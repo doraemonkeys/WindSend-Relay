@@ -134,8 +134,8 @@ services:
     container_name: windsend-relay-app
     restart: unless-stopped
     ports:
-      - "16779:16779" # Relay port
-      - "16780:16780" # Admin UI port
+      - "16779:16779" # Relay traffic port
+      - "16780:16780" # Web Admin Interface port
     environment:
       # --- Basic Relay Configuration ---
       WS_LISTEN_ADDR: "0.0.0.0:16779"
@@ -158,11 +158,11 @@ services:
       # --- Admin Web Interface Configuration ---
       WS_ADMIN_ADDR: "0.0.0.0:16780" # Address for the Admin UI
       WS_ADMIN_USER: "admin"         # Admin username
-      WS_ADMIN_PASSWORD: "YOUR_SECURE_ADMIN_PASSWORD_12_CHARS_MIN" # !!! CHANGE THIS !!! If left empty, a random one is generated and logged on first start.
+      WS_ADMIN_PASSWORD: "YOUR_SECURE_ADMIN_PASSWORD_12_CHARS_MIN" # !!! CHANGE THIS !!! If left empty or omitted, a random password is generated and printed to the container logs on the first start.
 
     volumes:
       - ./logs:/app/logs
-      - ./data:/app/data # Contains relay.db and web static files
+      - ./data:/app/data # relay.db
       #- ./config.json:/app/config.json # Optional: use config file instead of env vars
 
     # Optional: use config file instead of env vars

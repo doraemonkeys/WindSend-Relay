@@ -207,5 +207,5 @@ export class ApiClient {
 }
 
 
-// export const apiClient = new ApiClient('/api');
-export const apiClient = new ApiClient('http://100.92.107.115:16780/api');
+export const apiClient = new ApiClient('/api');
+// export const apiClient = new ApiClient('http://127.0.0.1:16780/api');

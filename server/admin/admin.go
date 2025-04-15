@@ -3,6 +3,8 @@ package admin
 import (
 	"crypto/rand"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -50,11 +52,11 @@ func NewAdminServer(relay *relay.Relay, storage storage.Storage, cfg *config.Adm
 }
 
 func (s *AdminServer) SetupRouter() {
-	// gin.SetMode(gin.ReleaseMode)
+	gin.SetMode(gin.ReleaseMode)
 	s.router = gin.Default()
 	s.router.SetTrustedProxies([]string{"127.0.0.1", "::1", "localhost"})
 
-	// TODO: Remove this
+	// TODO: Configure CORS properly if needed, avoid AllowAllOrigins in production
 	// s.router.Use(cors.New(cors.Config{
 	// 	AllowAllOrigins:  true,
 	// 	AllowCredentials: true,
@@ -64,12 +66,15 @@ func (s *AdminServer) SetupRouter() {
 	// 	// AllowOrigins:     []string{"*"},
 	// }))
 
-	s.router.NoRoute(s.handleNoRoute)
+	// Serve static files *first*
 	s.router.Static("/home", config.WebStaticDir)
+
+	// Redirect root to the SPA entry point
 	s.router.GET("/", func(c *gin.Context) {
 		c.Redirect(http.StatusMovedPermanently, "/home/index.html")
 	})
 
+	// API routes
 	api := s.router.Group("/api")
 	{
 		api.POST("/login", s.handleLogin)
@@ -77,6 +82,9 @@ func (s *AdminServer) SetupRouter() {
 		api.GET("/conn/status", s.authMiddleware(), s.handleGetConnectionStatus)
 		api.GET("/conn/close/:id", s.authMiddleware(), s.handleCloseConnection)
 	}
+
+	// Handle SPA routing fallback *after* static and API routes
+	s.router.NoRoute(s.handleNoRoute)
 }
 
 func (s *AdminServer) Run() {
@@ -87,10 +95,47 @@ func (s *AdminServer) Run() {
 	}
 }
 
+// handleNoRoute now acts as the SPA fallback handler
 func (s *AdminServer) handleNoRoute(c *gin.Context) {
-	zap.L().Info("no route found", zap.String("path", c.Request.URL.Path))
+	// If the request path starts with /api/, it's a genuine API 404
+	if strings.HasPrefix(c.Request.URL.Path, "/api/") {
+		zap.L().Warn("API route not found",
+			zap.String("method", c.Request.Method),
+			zap.String("path", c.Request.URL.Path),
+		)
+		c.JSON(http.StatusNotFound, gin.H{"message": "API endpoint not found"})
+		return
+	}
+
+	// If the request path starts with /home/ (and isn't an API call),
+	// assume it's an SPA route and serve index.html.
+	// Exclude specific file extensions you might want to 404 on if they don't exist.
+	if strings.HasPrefix(c.Request.URL.Path, "/home/") &&
+		!strings.Contains(c.Request.URL.Path, ".") { // Basic check: avoid serving index.html for missing assets like /home/assets/nonexistent.js
+
+		// Construct the full path to index.html
+		indexPath := filepath.Join(config.WebStaticDir, "index.html")
+
+		// Check if index.html exists
+		if _, err := os.Stat(indexPath); err == nil {
+			// Serve the main HTML file
+			zap.L().Debug("Serving SPA fallback", zap.String("path", c.Request.URL.Path), zap.String("serving", indexPath))
+			c.File(indexPath)
+			return
+		} else {
+			// Log error if index.html is missing, this indicates a build/config problem
+			zap.L().Error("SPA index.html not found for fallback", zap.String("path", indexPath), zap.Error(err))
+			// Fall through to the generic 404
+		}
+	}
+
+	// For any other route, return a standard 404
+	zap.L().Info("Generic route not found",
+		zap.String("method", c.Request.Method),
+		zap.String("path", c.Request.URL.Path),
+	)
 	c.JSON(http.StatusNotFound, gin.H{
-		"message": "not found",
+		"message": "Resource not found",
 	})
 }
 

@@ -31,3 +31,4 @@ config.json
 release_docker2.sh
 server/data/relay.db
 server/data/web
+server/docker-compose.yml
