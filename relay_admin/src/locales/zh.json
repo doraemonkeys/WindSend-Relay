@@ -1,0 +1,122 @@
+{
+  "action": {
+    "closeConnection": "关闭连接"
+  },
+  "activeConnections": "活跃连接",
+  "appName": "连接管理系统",
+  "button": {
+    "close": "关闭",
+    "loggingIn": "登录中...",
+    "login": "登 录",
+    "refresh": "刷新",
+    "retry": "重试",
+    "statistics": "统计数据"
+  },
+  "connection": {
+    "connectTime": "连接时间",
+    "createdAt": "创建时间",
+    "duration": "持续时间",
+    "lastActive": "最后活动",
+    "traffic": "传输量",
+    "updatedAt": "更新时间"
+  },
+  "emptyState": {
+    "allClosed": "所有连接都已关闭",
+    "noConnections": "当前没有活跃连接",
+    "noMatch": "没有找到匹配的连接",
+    "tryOtherSearch": "请尝试其他搜索条件"
+  },
+  "error": {
+    "closeConnectionFailed": "关闭连接失败",
+    "fetchConnections": "获取连接状态失败",
+    "loginFailedFallback": "登录失败，请检查用户名和密码",
+    "missingCredentials": "请输入用户名和密码"
+  },
+  "lastUpdated": "最后更新",
+  "login": {
+    "copyright": "© {year} {appName} · 保留所有权利",
+    "httpWarning": "您正在使用不安全的HTTP连接。请注意，您的登录信息可能会被第三方截获。",
+    "label": {
+      "password": "密码",
+      "username": "用户名"
+    },
+    "placeholder": {
+      "password": "请输入密码",
+      "username": "请输入用户名"
+    },
+    "prompt": "请登录您的账户",
+    "welcomeBack": "欢迎回来"
+  },
+  "search": {
+    "placeholder": "搜索连接地址或ID..."
+  },
+  "statisticView": {
+    "backToHome": "返回主页",
+    "pageSizeLabel": "每页显示",
+    "pageSizeOption": "{count} 条",
+    "pagination": {
+      "summary": "共 {total} 条记录，当前显示第 {start} - {end} 条"
+    },
+    "refreshData": "刷新数据",
+    "sort": {
+      "fieldLabel": "排序字段",
+      "options": {
+        "createdAt": "创建时间",
+        "default": "默认排序",
+        "totalRelayBytes": "总传输字节",
+        "totalRelayCount": "总中转次数",
+        "totalRelayErrCount": "错误中转次数",
+        "totalRelayMs": "总中转时间",
+        "totalRelayOfflineCount": "中转离线次数"
+      },
+      "orderLabel": "排序方式",
+      "orderOptions": {
+        "asc": "升序",
+        "desc": "降序"
+      }
+    },
+    "stats": {
+      "totalErrors": "错误中转",
+      "totalOffline": "中转离线",
+      "totalRecords": "总记录数",
+      "totalRelayCount": "总中转次数",
+      "totalTraffic": "总传输量"
+    },
+    "subtitle": "查看所有历史连接的详细统计数据",
+    "table": {
+      "empty": "暂无数据",
+      "header": {
+        "createdAt": "创建时间",
+        "errorCount": "错误中转",
+        "id": "ID",
+        "offlineCount": "中转离线",
+        "relayCount": "中转次数",
+        "totalDuration": "总中转时间",
+        "totalTraffic": "总传输量",
+        "updatedAt": "更新时间"
+      }
+    },
+    "title": "连接历史统计"
+  },
+  "stats": {
+    "active": "活跃中",
+    "idle": "空闲",
+    "totalConnections": "总连接数"
+  },
+  "status": {
+    "active": "活跃中",
+    "idle": "空闲"
+  },
+  "tooltip": {
+    "errorCount": "错误数",
+    "totalRequests": "总请求数"
+  },
+  "unit": {
+    "day": "天",
+    "hour": "小时",
+    "minute": "分钟",
+    "second": "秒"
+  },
+  "unit.day": "天",
+  "viewAndManageCurrentActiveConnections": "查看和管理当前所有活跃的连接"
+}

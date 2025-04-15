@@ -1,0 +1,122 @@
+{
+  "action": {
+    "closeConnection": "Close Connection"
+  },
+  "activeConnections": "Active Connections",
+  "appName": "Connection Management System",
+  "button": {
+    "close": "Close",
+    "loggingIn": "Logging in...",
+    "login": "Login",
+    "refresh": "Refresh",
+    "retry": "Retry",
+    "statistics": "Statistics"
+  },
+  "connection": {
+    "connectTime": "Connect Time",
+    "createdAt": "Created At",
+    "duration": "Duration",
+    "lastActive": "Last Active",
+    "traffic": "Traffic",
+    "updatedAt": "Updated At"
+  },
+  "emptyState": {
+    "allClosed": "All connections are closed",
+    "noConnections": "No active connections currently",
+    "noMatch": "No matching connections found",
+    "tryOtherSearch": "Please try different search criteria"
+  },
+  "error": {
+    "closeConnectionFailed": "Failed to close connection",
+    "fetchConnections": "Failed to fetch connection status",
+    "loginFailedFallback": "Login failed. Please check your username and password.",
+    "missingCredentials": "Please enter username and password"
+  },
+  "lastUpdated": "Last Updated",
+  "login": {
+    "copyright": "© {year} {appName}. All rights reserved.",
+    "httpWarning": "You are using an insecure HTTP connection. Please note that your login information may be intercepted by third parties.",
+    "label": {
+      "password": "Password",
+      "username": "Username"
+    },
+    "placeholder": {
+      "password": "Enter password",
+      "username": "Enter username"
+    },
+    "prompt": "Please log in to your account",
+    "welcomeBack": "Welcome Back"
+  },
+  "search": {
+    "placeholder": "Search by address or ID..."
+  },
+  "statisticView": {
+    "backToHome": "Back to Home",
+    "pageSizeLabel": "Items per page",
+    "pageSizeOption": "{count} items",
+    "pagination": {
+      "summary": "Showing {start} - {end} of {total} records"
+    },
+    "refreshData": "Refresh Data",
+    "sort": {
+      "fieldLabel": "Sort By",
+      "options": {
+        "createdAt": "Creation Time",
+        "default": "Default Sort",
+        "totalRelayBytes": "Total Bytes Transferred",
+        "totalRelayCount": "Total Relays",
+        "totalRelayErrCount": "Error Relays",
+        "totalRelayMs": "Total Relay Time",
+        "totalRelayOfflineCount": "Offline Relays"
+      },
+      "orderLabel": "Sort Order",
+      "orderOptions": {
+        "asc": "Ascending",
+        "desc": "Descending"
+      }
+    },
+    "stats": {
+      "totalErrors": "Total Errors",
+      "totalOffline": "Total Offline",
+      "totalRecords": "Total Records",
+      "totalRelayCount": "Total Relays",
+      "totalTraffic": "Total Traffic"
+    },
+    "subtitle": "View detailed statistics for all historical connections",
+    "table": {
+      "empty": "No data available",
+      "header": {
+        "createdAt": "Created At",
+        "errorCount": "Errors",
+        "id": "ID",
+        "offlineCount": "Offline",
+        "relayCount": "Relays",
+        "totalDuration": "Total Duration",
+        "totalTraffic": "Total Traffic",
+        "updatedAt": "Updated At"
+      }
+    },
+    "title": "Connection History Statistics"
+  },
+  "stats": {
+    "active": "Active",
+    "idle": "Idle",
+    "totalConnections": "Total Connections"
+  },
+  "status": {
+    "active": "Active",
+    "idle": "Idle"
+  },
+  "tooltip": {
+    "errorCount": "Error Count",
+    "totalRequests": "Total Requests"
+  },
+  "unit": {
+    "day": "Day",
+    "hour": "Hour",
+    "minute": "Minute",
+    "second": "Second"
+  },
+  "unit.day": "sky",
+  "viewAndManageCurrentActiveConnections": "View and Manage All Current Active Connections"
+}

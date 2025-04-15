@@ -50,8 +50,21 @@ func NewAdminServer(relay *relay.Relay, storage storage.Storage, cfg *config.Adm
 }
 
 func (s *AdminServer) SetupRouter() {
+	// gin.SetMode(gin.ReleaseMode)
 	s.router = gin.Default()
+	s.router.SetTrustedProxies([]string{"127.0.0.1", "::1", "localhost"})
 
+	// TODO: Remove this
+	// s.router.Use(cors.New(cors.Config{
+	// 	AllowAllOrigins:  true,
+	// 	AllowCredentials: true,
+	// 	AllowHeaders:     []string{"*"},
+	// 	AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+	// 	ExposeHeaders:    []string{"Content-Length"},
+	// 	// AllowOrigins:     []string{"*"},
+	// }))
+
+	s.router.NoRoute(s.handleNoRoute)
 	s.router.Static("/home", config.WebStaticDir)
 	s.router.GET("/", func(c *gin.Context) {
 		c.Redirect(http.StatusMovedPermanently, "/home/index.html")
@@ -59,11 +72,26 @@ func (s *AdminServer) SetupRouter() {
 
 	api := s.router.Group("/api")
 	{
-		api.GET("/login", s.handleLogin)
+		api.POST("/login", s.handleLogin)
 		api.GET("/conn/statistic", s.authMiddleware(), s.handleGetConnectionStatistic)
 		api.GET("/conn/status", s.authMiddleware(), s.handleGetConnectionStatus)
 		api.GET("/conn/close/:id", s.authMiddleware(), s.handleCloseConnection)
 	}
+}
+
+func (s *AdminServer) Run() {
+	s.SetupRouter()
+	err := s.router.Run(s.cfg.Addr)
+	if err != nil {
+		zap.L().Fatal("failed to run admin server", zap.Error(err))
+	}
+}
+
+func (s *AdminServer) handleNoRoute(c *gin.Context) {
+	zap.L().Info("no route found", zap.String("path", c.Request.URL.Path))
+	c.JSON(http.StatusNotFound, gin.H{
+		"message": "not found",
+	})
 }
 
 func (s *AdminServer) handleLogin(c *gin.Context) {
@@ -77,7 +105,7 @@ func (s *AdminServer) handleLogin(c *gin.Context) {
 		})
 		return
 	}
-	if username != s.cfg.User || strings.EqualFold(password, ph) {
+	if username != s.cfg.User || !strings.EqualFold(password, ph) {
 		zap.L().Error("invalid username or password", zap.String("username", username), zap.String("password", password))
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"message": "invalid username or password",
@@ -142,7 +170,7 @@ func (s *AdminServer) handleCloseConnection(c *gin.Context) {
 }
 
 func (s *AdminServer) handleGetConnectionStatus(c *gin.Context) {
-	var resp []dto.ActiveConnection
+	var resp = make([]dto.ActiveConnection, 0)
 
 	alives := s.relay.GetAllStatus()
 	for _, alive := range alives {
@@ -161,6 +189,9 @@ func (s *AdminServer) handleGetConnectionStatus(c *gin.Context) {
 			LastActive:  alive.LastActive,
 			Relaying:    alive.Relaying,
 			History: dto.HistoryStatistic{
+				ID:                     stat.ID,
+				CreatedAt:              stat.CreatedAt,
+				UpdatedAt:              stat.UpdatedAt,
 				TotalRelayCount:        stat.TotalRelayCount,
 				TotalRelayErrCount:     stat.TotalRelayErrCount,
 				TotalRelayOfflineCount: stat.TotalRelayOfflineCount,
@@ -182,6 +213,7 @@ func (s *AdminServer) handleGetConnectionStatistic(c *gin.Context) {
 	}
 	stats, total, err := s.storage.GetHistoryStatistic(req.Page, req.PageSize, req.SortBy, req.SortType)
 	if err != nil {
+		zap.L().Error("failed to get history statistic", zap.Error(err))
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"message": "failed to get history statistic",
 		})
@@ -192,9 +224,12 @@ func (s *AdminServer) handleGetConnectionStatistic(c *gin.Context) {
 		Page:     req.Page,
 		PageSize: req.PageSize,
 	}
-	var list []dto.HistoryStatistic
+	var list = make([]dto.HistoryStatistic, 0)
 	for _, stat := range stats {
 		list = append(list, dto.HistoryStatistic{
+			ID:                     stat.ID,
+			CreatedAt:              stat.CreatedAt,
+			UpdatedAt:              stat.UpdatedAt,
 			TotalRelayCount:        stat.TotalRelayCount,
 			TotalRelayErrCount:     stat.TotalRelayErrCount,
 			TotalRelayOfflineCount: stat.TotalRelayOfflineCount,

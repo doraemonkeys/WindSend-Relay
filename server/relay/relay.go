@@ -357,6 +357,9 @@ func (r *Relay) handleRelay(conn net.Conn, head protocol.ReqHead, cipher crypto.
 	targetConn.Relaying = true
 	defer func() {
 		targetConn.Relaying = false
+		if !relaySuccess {
+			return
+		}
 		go func() {
 			// zap.L().Debug("try to read relay end flag")
 			alive := targetConn.SendMsgDetectAlive()

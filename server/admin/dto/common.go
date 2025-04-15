@@ -23,11 +23,14 @@ type PaginatedData[T any] struct {
 }
 
 type HistoryStatistic struct {
-	TotalRelayCount        int   `json:"totalRelayCount"`
-	TotalRelayErrCount     int   `json:"totalRelayErrCount"`
-	TotalRelayOfflineCount int   `json:"totalRelayOfflineCount"`
-	TotalRelayMs           int64 `json:"totalRelayMs"`
-	TotalRelayBytes        int64 `json:"totalRelayBytes"`
+	ID                     string    `json:"id"`
+	TotalRelayCount        int       `json:"totalRelayCount"`
+	TotalRelayErrCount     int       `json:"totalRelayErrCount"`
+	TotalRelayOfflineCount int       `json:"totalRelayOfflineCount"`
+	TotalRelayMs           int64     `json:"totalRelayMs"`
+	TotalRelayBytes        int64     `json:"totalRelayBytes"`
+	CreatedAt              time.Time `json:"createdAt"`
+	UpdatedAt              time.Time `json:"updatedAt"`
 }
 
 type ActiveConnection struct {

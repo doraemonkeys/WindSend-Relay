@@ -26,8 +26,8 @@ go.work.sum
 
 *.log
 gitignore*
-dist/*
+server/dist/*
 config.json
 release_docker2.sh
-data/relay.db
-data/web
+server/data/relay.db
+server/data/web

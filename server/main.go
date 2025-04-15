@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/doraemonkeys/WindSend-Relay/admin"
 	"github.com/doraemonkeys/WindSend-Relay/config"
 	"github.com/doraemonkeys/WindSend-Relay/global"
 	"github.com/doraemonkeys/WindSend-Relay/relay"
@@ -14,5 +15,7 @@ func main() {
 	storage := storage.NewStorage(config.DBPath)
 	relay := relay.NewRelay(*cfg, storage)
 
+	adminServer := admin.NewAdminServer(relay, storage, &cfg.AdminConfig)
+	go adminServer.Run()
 	relay.Run()
 }

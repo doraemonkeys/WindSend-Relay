@@ -3,10 +3,12 @@ package storage
 import (
 	"encoding/base64"
 	"errors"
+	"fmt"
 
 	"github.com/doraemonkeys/WindSend-Relay/pkg"
 	"github.com/doraemonkeys/WindSend-Relay/storage/acl/model"
 	"github.com/doraemonkeys/WindSend-Relay/storage/acl/query"
+	"github.com/iancoleman/strcase"
 	"go.uber.org/zap"
 	"gorm.io/gen/field"
 	"gorm.io/gorm"
@@ -22,7 +24,10 @@ type Storage struct {
 
 func NewStorage(path string) Storage {
 	db := pkg.NewSqliteDB(path, zap.L())
-	err := db.AutoMigrate(&model.RelayStatistic{})
+	err := db.AutoMigrate(
+		&model.RelayStatistic{},
+		&model.KeyValue{},
+	)
 	if err != nil {
 		panic(err)
 	}
@@ -130,6 +135,9 @@ func (s Storage) IncrementRelayOfflineCount(id string) {
 func (s Storage) GetHistoryStatisticByID(id string) (*model.RelayStatistic, error) {
 	q := query.Use(s.db)
 	stat, err := q.RelayStatistic.Where(q.RelayStatistic.ID.Eq(id)).First()
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return &model.RelayStatistic{}, nil
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -145,7 +153,7 @@ func (s Storage) GetHistoryStatistic(page, pageSize int, sortBy string, sortType
 
 func (s Storage) getHistoryStatistic(page, pageSize int) ([]*model.RelayStatistic, int64, error) {
 	q := query.Use(s.db)
-	stats, count, err := q.RelayStatistic.FindByPage(page, pageSize)
+	stats, count, err := q.RelayStatistic.FindByPage(page-1, pageSize)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -153,12 +161,14 @@ func (s Storage) getHistoryStatistic(page, pageSize int) ([]*model.RelayStatisti
 }
 
 func (s Storage) getHistoryStatisticBySort(page, pageSize int, sortBy string, sortType string) ([]*model.RelayStatistic, int64, error) {
+	fmt.Println("getHistoryStatisticBySort", page, pageSize, sortBy, sortType)
 	q := query.Use(s.db)
 	if !s.checkSortType(sortType) {
 		return nil, 0, errors.New("invalid sort type")
 	}
+	sortBy = amendSortBy(sortBy)
 	if !s.checkSortBy(sortBy) {
-		return nil, 0, errors.New("invalid sort by")
+		return nil, 0, fmt.Errorf("invalid sort by: %s", sortBy)
 	}
 	// q.RelayStatistic.TotalRelayBytes
 	desc := sortType == "desc"
@@ -182,8 +192,40 @@ func (s Storage) getHistoryStatisticBySort(page, pageSize int, sortBy string, so
 		} else {
 			orderExpr = q.RelayStatistic.TotalRelayBytes.Asc()
 		}
+	case q.RelayStatistic.TotalRelayOfflineCount.ColumnName().String():
+		if desc {
+			orderExpr = q.RelayStatistic.TotalRelayOfflineCount.Desc()
+		} else {
+			orderExpr = q.RelayStatistic.TotalRelayOfflineCount.Asc()
+		}
+	case q.RelayStatistic.TotalRelayErrCount.ColumnName().String():
+		if desc {
+			orderExpr = q.RelayStatistic.TotalRelayErrCount.Desc()
+		} else {
+			orderExpr = q.RelayStatistic.TotalRelayErrCount.Asc()
+		}
+	case q.RelayStatistic.TotalRelayErrCount.ColumnName().String():
+		if desc {
+			orderExpr = q.RelayStatistic.TotalRelayErrCount.Desc()
+		} else {
+			orderExpr = q.RelayStatistic.TotalRelayErrCount.Asc()
+		}
+	case q.RelayStatistic.CreatedAt.ColumnName().String():
+		if desc {
+			orderExpr = q.RelayStatistic.CreatedAt.Desc()
+		} else {
+			orderExpr = q.RelayStatistic.CreatedAt.Asc()
+		}
+	case q.RelayStatistic.UpdatedAt.ColumnName().String():
+		if desc {
+			orderExpr = q.RelayStatistic.UpdatedAt.Desc()
+		} else {
+			orderExpr = q.RelayStatistic.UpdatedAt.Asc()
+		}
+	default:
+		return nil, 0, fmt.Errorf("unsupported sort by: %s", sortBy)
 	}
-	stats, err := q.RelayStatistic.Offset(page).Limit(pageSize).Order(orderExpr).Find()
+	stats, err := q.RelayStatistic.Offset(page - 1).Limit(pageSize).Order(orderExpr).Find()
 	if err != nil {
 		return nil, 0, err
 	}
@@ -198,8 +240,18 @@ func (s Storage) checkSortType(sortType string) bool {
 	return sortType == "asc" || sortType == "desc"
 }
 
+func amendSortBy(sortBy string) string {
+	sortBy = strcase.ToSnake(sortBy)
+	return sortBy
+}
+
 func (s Storage) checkSortBy(sortBy string) bool {
-	return sortBy == query.RelayStatistic.TotalRelayCount.ColumnName().String() ||
-		sortBy == query.RelayStatistic.TotalRelayMs.ColumnName().String() ||
-		sortBy == query.RelayStatistic.TotalRelayBytes.ColumnName().String()
+	q := query.Use(s.db)
+	return sortBy == q.RelayStatistic.TotalRelayCount.ColumnName().String() ||
+		sortBy == q.RelayStatistic.TotalRelayMs.ColumnName().String() ||
+		sortBy == q.RelayStatistic.TotalRelayBytes.ColumnName().String() ||
+		sortBy == q.RelayStatistic.CreatedAt.ColumnName().String() ||
+		sortBy == q.RelayStatistic.UpdatedAt.ColumnName().String() ||
+		sortBy == q.RelayStatistic.TotalRelayErrCount.ColumnName().String() ||
+		sortBy == q.RelayStatistic.TotalRelayOfflineCount.ColumnName().String()
 }
