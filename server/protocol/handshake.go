@@ -4,12 +4,14 @@ import (
 	"crypto/ecdh"
 	"crypto/rand"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"net"
 
 	"github.com/doraemonkeys/WindSend-Relay/relay/auth"
 	"github.com/doraemonkeys/WindSend-Relay/tool"
 	"github.com/doraemonkeys/doraemon/crypto"
+	"go.uber.org/zap"
 )
 
 func handshakeECDH(req HandshakeReq) (ecdhPublicKey *ecdh.PublicKey, shared tool.AES192Key, err error) {
@@ -34,9 +36,14 @@ func handshakeECDH(req HandshakeReq) (ecdhPublicKey *ecdh.PublicKey, shared tool
 }
 
 func handleHandshakeReq(req HandshakeReq, authenticator *auth.Authentication, enableAuth bool) (resp *HandshakeResp, shared tool.AES192Key, authKey tool.AES192Key, err error) {
-	if req.AuthFieldB64 != "" && authenticator == nil {
-		// Relay server has no configured keys, but the client sent an authentication message
-		return nil, nil, nil, fmt.Errorf("invalid handshake request: invalid auth field")
+	if authenticator == nil {
+		if req.AuthFieldB64 != "" {
+			// Relay server has no configured keys, but the client sent an authentication message
+			return nil, nil, nil, fmt.Errorf("invalid handshake request: invalid auth field")
+		}
+		if req.KDFSaltB64 != "" {
+			return nil, nil, nil, fmt.Errorf("invalid handshake request: invalid kdf salt")
+		}
 	}
 	if enableAuth && req.AuthFieldB64 == "" {
 		return nil, nil, nil, fmt.Errorf("invalid handshake request: no auth field")
@@ -79,11 +86,29 @@ func handleHandshakeReq(req HandshakeReq, authenticator *auth.Authentication, en
 	}, shared, authKey, nil
 }
 
+var ErrEmptyKDFSalt = errors.New("empty kdf salt")
+
 // nil authenticator means no authentication,return nil authKey
 func Handshake(conn net.Conn, authenticator *auth.Authentication, enableAuth bool) (cipher crypto.SymmetricCipher, authKey tool.AES192Key, err error) {
 	req, err := ReadHandshakeReq(conn)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to read handshake request: %w", err)
+	}
+	if req.AuthFieldB64 != "" && authenticator == nil {
+		_ = SendHandshakeResp(conn, HandshakeResp{
+			Code: StatusAuthFailed,
+			Msg:  "Server not set key",
+		})
+		return nil, nil, fmt.Errorf("server not set key")
+	}
+	if req.AuthFieldB64 != "" && (req.KDFSaltB64 == "" || req.KDFSaltB64 != authenticator.GetSaltB64()) {
+		zap.L().Debug("kdf salt mismatch", zap.String("kdf salt", req.KDFSaltB64),
+			zap.String("expected", authenticator.GetSaltB64()))
+		_ = SendHandshakeResp(conn, HandshakeResp{
+			Code:       StatusKDFSaltMismatch,
+			KDFSaltB64: authenticator.GetSaltB64(),
+		})
+		return nil, nil, ErrEmptyKDFSalt
 	}
 	resp, sharedKey, authKey, err := handleHandshakeReq(req, authenticator, enableAuth)
 	if err != nil {

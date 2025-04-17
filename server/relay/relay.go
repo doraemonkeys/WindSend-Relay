@@ -35,27 +35,31 @@ type Relay struct {
 }
 
 func NewRelay(config config.Config, storage storage.Storage) *Relay {
-	var secretKeys []string
+
+	var rawSecretKeys []string
 	for _, secret := range config.SecretInfo {
-		secretKeys = append(secretKeys, secret.SecretKey)
+		rawSecretKeys = append(rawSecretKeys, secret.SecretKey)
 	}
+
+	at := auth.NewAuthentication(rawSecretKeys)
+	if len(rawSecretKeys) == 0 {
+		zap.L().Warn("No secret keys, authentication is disabled")
+		at = nil
+	}
+	rawKeyToAES192Key := at.GetAllAuthKeys()
 	connLimit := make(map[string]*struct {
 		count atomic.Int32
 		limit int
-	}, len(secretKeys))
+	}, len(rawSecretKeys))
 	for _, secret := range config.SecretInfo {
-		authKeyB64 := base64.StdEncoding.EncodeToString(tool.HashToAES192Key([]byte(secret.SecretKey)))
+		authKeyB64 := base64.StdEncoding.EncodeToString(rawKeyToAES192Key[secret.SecretKey])
 		connLimit[authKeyB64] = &struct {
 			count atomic.Int32
 			limit int
 		}{count: atomic.Int32{}, limit: secret.MaxConn}
 	}
-	at := auth.NewAuthentication(secretKeys)
-	if len(secretKeys) == 0 {
-		zap.L().Warn("No secret keys, authentication is disabled")
-		at = nil
-	}
-	if config.EnableAuth && len(secretKeys) == 0 {
+
+	if config.EnableAuth && len(rawSecretKeys) == 0 {
 		zap.L().Fatal("Enable authentication but no secret keys")
 	}
 	return &Relay{
@@ -113,6 +117,9 @@ func (r *Relay) GetAllStatus() []ConnectionStatus {
 
 func (r *Relay) mainProcess(conn net.Conn) {
 	cipher, authKey, err := protocol.Handshake(conn, r.authenticator, r.config.EnableAuth)
+	if err == protocol.ErrEmptyKDFSalt {
+		cipher, authKey, err = protocol.Handshake(conn, r.authenticator, r.config.EnableAuth)
+	}
 	if err != nil {
 		zap.L().Info("handshake failed", zap.Error(err))
 		_ = conn.Close()

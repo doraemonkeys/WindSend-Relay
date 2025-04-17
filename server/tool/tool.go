@@ -35,7 +35,7 @@ func HashToAES192Key2(c []byte) AES192Key {
 }
 
 func AES192KeyKDF(password string, salt []byte) AES192Key {
-	iterations := 300000
+	iterations := 10000
 	key, err := pbkdf2.Key(sha256.New, password, salt, iterations, 192/8)
 	if err != nil {
 		panic("unreachable: " + err.Error())

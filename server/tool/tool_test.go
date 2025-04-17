@@ -2,6 +2,7 @@ package tool
 
 import (
 	"crypto/rand"
+	"encoding/base64"
 	"testing"
 )
 
@@ -44,5 +45,16 @@ func BenchmarkAES192KeyKDF(b *testing.B) {
 	b.ResetTimer()
 	for b.Loop() {
 		_ = AES192KeyKDF(c, salt)
+	}
+}
+
+func TestAES192KeyKDF(t *testing.T) {
+	const pwd = "mysecretpassword"
+	const salt = "test"
+	kdf := AES192KeyKDF(pwd, []byte(salt))
+	kdfB64 := base64.StdEncoding.EncodeToString(kdf)
+	expected := "9Dt2Ws9OB1uDRkxK4IHBHpqm9rMQ0d+z"
+	if kdfB64 != expected {
+		t.Errorf("AES192KeyKDF() = %v, want %v", kdfB64, expected)
 	}
 }

@@ -100,7 +100,7 @@ func (s Storage) AddRelayStatistic(id string, success bool, ms int, bytes int64)
 		if !success {
 			stat.TotalRelayErrCount++
 		}
-		r, err := tx.RelayStatistic.Updates(stat)
+		r, err := tx.RelayStatistic.Where(tx.RelayStatistic.ID.Eq(id)).Updates(stat)
 		if err != nil {
 			zap.L().Error("save relay statistic failed", zap.Error(err))
 			return err
