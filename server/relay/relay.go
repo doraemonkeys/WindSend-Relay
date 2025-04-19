@@ -115,6 +115,21 @@ func (r *Relay) GetAllStatus() []ConnectionStatus {
 	return statuses
 }
 
+func (r *Relay) GetConnectionStatus(id string) (ConnectionStatus, bool) {
+	r.connectionsMu.RLock()
+	defer r.connectionsMu.RUnlock()
+	if c, ok := r.connections[id]; ok {
+		return ConnectionStatus{
+			ID:          c.ID,
+			ReqAddr:     c.Conn.RemoteAddr().String(),
+			ConnectTime: c.ConnectTime,
+			LastActive:  c.LastActive,
+			Relaying:    c.Relaying,
+		}, true
+	}
+	return ConnectionStatus{}, false
+}
+
 func (r *Relay) mainProcess(conn net.Conn) {
 	cipher, authKey, err := protocol.Handshake(conn, r.authenticator, r.config.EnableAuth)
 	if err == protocol.ErrEmptyKDFSalt {

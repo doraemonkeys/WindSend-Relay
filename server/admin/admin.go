@@ -305,6 +305,13 @@ func (s *AdminServer) handleUpdateConnection(c *gin.Context) {
 		})
 		return
 	}
+	_, ok := s.relay.GetConnectionStatus(req.ID)
+	if !ok {
+		c.JSON(http.StatusNotFound, gin.H{
+			"message": "connection not found",
+		})
+		return
+	}
 	err := s.storage.UpdateConnectionCustomName(req.ID, req.CustomName)
 	if err != nil {
 		zap.L().Error("failed to update connection custom name", zap.Error(err))
