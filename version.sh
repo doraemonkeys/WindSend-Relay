@@ -6,7 +6,7 @@
 #     exit 1
 # fi
 
-PROJECT_VERSION_FILE_PATH="/server/version/version.go"
+PROJECT_VERSION_FILE_PATH="server/version/version.go"
 
 if [ -z "$PROJECT_VERSION" ]; then
     read -rp "PROJECT_VERSION:v" PROJECT_VERSION
@@ -26,7 +26,7 @@ if ! command -v sedr &>/dev/null; then
 fi
 
 # modify version.go (Version = "x.x.x")
-sedr 'Version[\s]+=[\s]+\"(.*?)\"' "\$1" "$PROJECT_VERSION" "$PROJECT_VERSION_FILE_PATH"
+sedr 'Version[\s]+=[\s]+\"(.*?)\"' "\$1" "$PROJECT_VERSION" "$PROJECT_VERSION_FILE_PATH" || exit 1
 
 git add "$PROJECT_VERSION_FILE_PATH"
 git commit -m "release: v$PROJECT_VERSION"
