@@ -258,12 +258,21 @@ func (s Storage) checkSortBy(sortBy string) bool {
 
 func (s Storage) UpdateConnectionCustomName(id string, customName string) error {
 	q := query.Use(s.db)
-	r, err := q.RelayStatistic.Where(q.RelayStatistic.ID.Eq(id)).UpdateSimple(q.RelayStatistic.CustomName.Value(customName))
-	if err != nil {
-		return err
-	}
-	if r.RowsAffected == 0 {
-		return errors.New("unexpected: relay statistic not found")
-	}
+	q.Transaction(func(tx *query.Query) error {
+		_, err := tx.RelayStatistic.Where(tx.RelayStatistic.ID.Eq(id)).FirstOrCreate()
+		if err != nil {
+			zap.L().Error("update connection custom name failed", zap.Error(err))
+			return err
+		}
+		r, err := tx.RelayStatistic.Where(tx.RelayStatistic.ID.Eq(id)).UpdateSimple(tx.RelayStatistic.CustomName.Value(customName))
+		if err != nil {
+			zap.L().Error("save relay statistic failed", zap.Error(err))
+			return err
+		}
+		if r.RowsAffected == 0 {
+			zap.L().Error("unexpected: relay statistic record not found", zap.String("id", id))
+		}
+		return nil
+	})
 	return nil
 }
