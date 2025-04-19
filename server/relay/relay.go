@@ -197,7 +197,7 @@ func (r *Relay) handleConnect(conn net.Conn, head protocol.ReqHead, cipher crypt
 				}
 				return
 			}
-
+			zap.L().Info("Existing connection not active, removing it", zap.String("id", req.ID))
 			r.RemoveLongConnection(req.ID)
 
 			r.connectionsMu.RLock()
@@ -360,10 +360,12 @@ func (r *Relay) handleRelay(conn net.Conn, head protocol.ReqHead, cipher crypto.
 	}
 
 	targetConn.Mu.Lock()
-	defer targetConn.Mu.Unlock()
+	defer func() {
+		targetConn.Mu.Unlock()
+		targetConn.Relaying = false
+	}()
 	targetConn.Relaying = true
 	defer func() {
-		targetConn.Relaying = false
 		if !relaySuccess {
 			return
 		}

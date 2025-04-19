@@ -255,3 +255,15 @@ func (s Storage) checkSortBy(sortBy string) bool {
 		sortBy == q.RelayStatistic.TotalRelayErrCount.ColumnName().String() ||
 		sortBy == q.RelayStatistic.TotalRelayOfflineCount.ColumnName().String()
 }
+
+func (s Storage) UpdateConnectionCustomName(id string, customName string) error {
+	q := query.Use(s.db)
+	r, err := q.RelayStatistic.Where(q.RelayStatistic.ID.Eq(id)).UpdateSimple(q.RelayStatistic.CustomName.Value(customName))
+	if err != nil {
+		return err
+	}
+	if r.RowsAffected == 0 {
+		return errors.New("unexpected: relay statistic not found")
+	}
+	return nil
+}

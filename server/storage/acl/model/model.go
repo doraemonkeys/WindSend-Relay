@@ -20,11 +20,12 @@ type RelayStatistic struct {
 	ID                     string `gorm:"column:id;primary_key;index"`
 	CreatedAt              time.Time
 	UpdatedAt              time.Time
-	TotalRelayCount        int   `gorm:"column:total_relay_count;default:0"`
-	TotalRelayErrCount     int   `gorm:"column:total_relay_err_count;default:0"`
-	TotalRelayOfflineCount int   `gorm:"column:total_relay_offline_count;default:0"`
-	TotalRelayMs           int64 `gorm:"column:total_relay_ms;default:0"`
-	TotalRelayBytes        int64 `gorm:"column:total_relay_bytes;default:0"`
+	CustomName             string `gorm:"column:custom_name;default:''"`
+	TotalRelayCount        int    `gorm:"column:total_relay_count;default:0"`
+	TotalRelayErrCount     int    `gorm:"column:total_relay_err_count;default:0"`
+	TotalRelayOfflineCount int    `gorm:"column:total_relay_offline_count;default:0"`
+	TotalRelayMs           int64  `gorm:"column:total_relay_ms;default:0"`
+	TotalRelayBytes        int64  `gorm:"column:total_relay_bytes;default:0"`
 }
 
 type KeyValue struct {

@@ -1,15 +1,19 @@
 {
   "action": {
-    "closeConnection": "关闭连接"
+    "closeConnection": "关闭连接",
+    "editName": "编辑名称"
   },
   "activeConnections": "活跃连接",
   "appName": "连接管理系统",
   "button": {
+    "cancel": "取消",
     "close": "关闭",
+    "dismiss": "关闭",
     "loggingIn": "登录中...",
     "login": "登 录",
     "refresh": "刷新",
     "retry": "重试",
+    "save": "保存",
     "statistics": "统计数据"
   },
   "connection": {
@@ -28,9 +32,12 @@
   },
   "error": {
     "closeConnectionFailed": "关闭连接失败",
+    "customNameCannotBeEmpty": "自定义名称不能为空",
     "fetchConnections": "获取连接状态失败",
     "loginFailedFallback": "登录失败，请检查用户名和密码",
-    "missingCredentials": "请输入用户名和密码"
+    "missingCredentials": "请输入用户名和密码",
+    "updateFailedPrefix": "更新失败",
+    "updateNameFailed": "更新自定义名称失败"
   },
   "lastUpdated": "最后更新",
   "login": {
@@ -47,8 +54,11 @@
     "prompt": "请登录您的账户",
     "welcomeBack": "欢迎回来"
   },
+  "placeholder": {
+    "customName": "输入自定义名称"
+  },
   "search": {
-    "placeholder": "搜索连接地址或ID..."
+    "placeholderConnections": "搜索连接地址、ID、自定义名称..."
   },
   "statisticView": {
     "backToHome": "返回主页",
@@ -108,6 +118,7 @@
     "idle": "空闲"
   },
   "tooltip": {
+    "editName": "编辑自定义名称",
     "errorCount": "错误数",
     "totalRequests": "总请求数"
   },
@@ -118,5 +129,6 @@
     "second": "秒"
   },
   "unit.day": "天",
+  "unit.hour": "小时",
   "viewAndManageCurrentActiveConnections": "查看和管理当前所有活跃的连接"
 }

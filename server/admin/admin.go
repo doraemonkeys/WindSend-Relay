@@ -15,6 +15,7 @@ import (
 	"github.com/doraemonkeys/WindSend-Relay/tool"
 	"github.com/doraemonkeys/doraemon"
 	"github.com/doraemonkeys/doraemon/jwt"
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )
@@ -57,14 +58,16 @@ func (s *AdminServer) SetupRouter() {
 	s.router.SetTrustedProxies([]string{"127.0.0.1", "::1", "localhost"})
 
 	// TODO: Configure CORS properly if needed, avoid AllowAllOrigins in production
-	// s.router.Use(cors.New(cors.Config{
-	// 	AllowAllOrigins:  true,
-	// 	AllowCredentials: true,
-	// 	AllowHeaders:     []string{"*"},
-	// 	AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-	// 	ExposeHeaders:    []string{"Content-Length"},
-	// 	// AllowOrigins:     []string{"*"},
-	// }))
+	allowAddr := []string{"http://127.0.0.1:5173", "http://localhost:3000"}
+	s.router.Use(cors.New(cors.Config{
+		// AllowAllOrigins:  true,
+		AllowCredentials: true,
+		AllowHeaders:     []string{"*"},
+		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		ExposeHeaders:    []string{"Content-Length"},
+		// AllowOrigins:     []string{"*"},
+		AllowOrigins: allowAddr,
+	}))
 
 	// Serve static files *first*
 	s.router.Static("/home", config.WebStaticDir)
@@ -81,6 +84,7 @@ func (s *AdminServer) SetupRouter() {
 		api.GET("/conn/statistic", s.authMiddleware(), s.handleGetConnectionStatistic)
 		api.GET("/conn/status", s.authMiddleware(), s.handleGetConnectionStatus)
 		api.GET("/conn/close/:id", s.authMiddleware(), s.handleCloseConnection)
+		api.POST("/conn/update", s.authMiddleware(), s.handleUpdateConnection)
 	}
 
 	// Handle SPA routing fallback *after* static and API routes
@@ -233,12 +237,14 @@ func (s *AdminServer) handleGetConnectionStatus(c *gin.Context) {
 		}
 		resp = append(resp, dto.ActiveConnection{
 			ID:          alive.ID,
+			CustomName:  stat.CustomName,
 			ReqAddr:     alive.ReqAddr,
 			ConnectTime: alive.ConnectTime,
 			LastActive:  alive.LastActive,
 			Relaying:    alive.Relaying,
 			History: dto.HistoryStatistic{
 				ID:                     stat.ID,
+				CustomName:             stat.CustomName,
 				CreatedAt:              stat.CreatedAt,
 				UpdatedAt:              stat.UpdatedAt,
 				TotalRelayCount:        stat.TotalRelayCount,
@@ -277,6 +283,7 @@ func (s *AdminServer) handleGetConnectionStatistic(c *gin.Context) {
 	for _, stat := range stats {
 		list = append(list, dto.HistoryStatistic{
 			ID:                     stat.ID,
+			CustomName:             stat.CustomName,
 			CreatedAt:              stat.CreatedAt,
 			UpdatedAt:              stat.UpdatedAt,
 			TotalRelayCount:        stat.TotalRelayCount,
@@ -288,4 +295,23 @@ func (s *AdminServer) handleGetConnectionStatistic(c *gin.Context) {
 	}
 	resp.List = list
 	c.JSON(http.StatusOK, resp)
+}
+
+func (s *AdminServer) handleUpdateConnection(c *gin.Context) {
+	var req = dto.ReqUpdateConnection{}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"message": "invalid request",
+		})
+		return
+	}
+	err := s.storage.UpdateConnectionCustomName(req.ID, req.CustomName)
+	if err != nil {
+		zap.L().Error("failed to update connection custom name", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"message": "failed to update connection custom name",
+		})
+		return
+	}
+	c.Status(http.StatusOK)
 }

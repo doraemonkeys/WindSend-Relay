@@ -1,15 +1,19 @@
 {
   "action": {
-    "closeConnection": "Close Connection"
+    "closeConnection": "Close Connection",
+    "editName": "Edit Name"
   },
   "activeConnections": "Active Connections",
   "appName": "Connection Management System",
   "button": {
+    "cancel": "Cancel",
     "close": "Close",
+    "dismiss": "Dismiss",
     "loggingIn": "Logging in...",
     "login": "Login",
     "refresh": "Refresh",
     "retry": "Retry",
+    "save": "Save",
     "statistics": "Statistics"
   },
   "connection": {
@@ -28,9 +32,12 @@
   },
   "error": {
     "closeConnectionFailed": "Failed to close connection",
+    "customNameCannotBeEmpty": "Custom name cannot be empty.",
     "fetchConnections": "Failed to fetch connection status",
     "loginFailedFallback": "Login failed. Please check your username and password.",
-    "missingCredentials": "Please enter username and password"
+    "missingCredentials": "Please enter username and password",
+    "updateFailedPrefix": "Update failed",
+    "updateNameFailed": "Failed to update connection name."
   },
   "lastUpdated": "Last Updated",
   "login": {
@@ -47,8 +54,11 @@
     "prompt": "Please log in to your account",
     "welcomeBack": "Welcome Back"
   },
+  "placeholder": {
+    "customName": "Enter custom name"
+  },
   "search": {
-    "placeholder": "Search by address or ID..."
+    "placeholderConnections": "Search by address, custom name, or ID..."
   },
   "statisticView": {
     "backToHome": "Back to Home",
@@ -108,6 +118,7 @@
     "idle": "Idle"
   },
   "tooltip": {
+    "editName": "Edit custom name",
     "errorCount": "Error Count",
     "totalRequests": "Total Requests"
   },
@@ -118,5 +129,6 @@
     "second": "Second"
   },
   "unit.day": "sky",
+  "unit.hour": "",
   "viewAndManageCurrentActiveConnections": "View and Manage All Current Active Connections"
 }

@@ -31,6 +31,7 @@ func newRelayStatistic(db *gorm.DB, opts ...gen.DOOption) relayStatistic {
 	_relayStatistic.ID = field.NewString(tableName, "id")
 	_relayStatistic.CreatedAt = field.NewTime(tableName, "created_at")
 	_relayStatistic.UpdatedAt = field.NewTime(tableName, "updated_at")
+	_relayStatistic.CustomName = field.NewString(tableName, "custom_name")
 	_relayStatistic.TotalRelayCount = field.NewInt(tableName, "total_relay_count")
 	_relayStatistic.TotalRelayErrCount = field.NewInt(tableName, "total_relay_err_count")
 	_relayStatistic.TotalRelayOfflineCount = field.NewInt(tableName, "total_relay_offline_count")
@@ -49,6 +50,7 @@ type relayStatistic struct {
 	ID                     field.String
 	CreatedAt              field.Time
 	UpdatedAt              field.Time
+	CustomName             field.String
 	TotalRelayCount        field.Int
 	TotalRelayErrCount     field.Int
 	TotalRelayOfflineCount field.Int
@@ -73,6 +75,7 @@ func (r *relayStatistic) updateTableName(table string) *relayStatistic {
 	r.ID = field.NewString(table, "id")
 	r.CreatedAt = field.NewTime(table, "created_at")
 	r.UpdatedAt = field.NewTime(table, "updated_at")
+	r.CustomName = field.NewString(table, "custom_name")
 	r.TotalRelayCount = field.NewInt(table, "total_relay_count")
 	r.TotalRelayErrCount = field.NewInt(table, "total_relay_err_count")
 	r.TotalRelayOfflineCount = field.NewInt(table, "total_relay_offline_count")
@@ -94,10 +97,11 @@ func (r *relayStatistic) GetFieldByName(fieldName string) (field.OrderExpr, bool
 }
 
 func (r *relayStatistic) fillFieldMap() {
-	r.fieldMap = make(map[string]field.Expr, 8)
+	r.fieldMap = make(map[string]field.Expr, 9)
 	r.fieldMap["id"] = r.ID
 	r.fieldMap["created_at"] = r.CreatedAt
 	r.fieldMap["updated_at"] = r.UpdatedAt
+	r.fieldMap["custom_name"] = r.CustomName
 	r.fieldMap["total_relay_count"] = r.TotalRelayCount
 	r.fieldMap["total_relay_err_count"] = r.TotalRelayErrCount
 	r.fieldMap["total_relay_offline_count"] = r.TotalRelayOfflineCount

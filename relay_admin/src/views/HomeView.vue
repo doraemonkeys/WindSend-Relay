@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue';
+import { ref, onMounted, computed, nextTick } from 'vue';
 import { useApiStore } from '@/stores/api';
 import router from '@/router';
 import { apiClient, type ActiveConnection } from '@/api/api';
@@ -7,15 +7,12 @@ import { formatBytes } from '@/utils/utils';
 import { useI18n } from 'vue-i18n';
 
 // --- i18n ---
-// Destructure locale along with t
 const { t, locale } = useI18n();
 
 // --- Define available languages ---
-// Make sure these codes match the locales configured in your i18n setup
 const availableLocales = ref([
   { code: 'en', name: 'English' },
   { code: 'zh', name: '中文' },
-  // Add other supported languages here
 ]);
 
 // --- State ---
@@ -23,9 +20,13 @@ const apiStore = useApiStore();
 const connections = ref<ActiveConnection[]>([]);
 const loading = ref(true);
 const error = ref<string | null>(null);
+const updateError = ref<string | null>(null); // Specific error for updates
 const searchQuery = ref('');
 const refreshing = ref(false);
 const lastRefreshed = ref(new Date());
+const editingConnectionId = ref<string | null>(null); // Track which connection is being edited
+const editingName = ref(''); // Temporary storage for the name being edited
+const editInputRef = ref<HTMLInputElement | null>(null); // Ref for the input field to focus it
 
 // --- Computed Properties ---
 const filteredConnections = computed(() => {
@@ -33,6 +34,7 @@ const filteredConnections = computed(() => {
   const query = searchQuery.value.toLowerCase();
   return connections.value.filter(conn =>
     conn.reqAddr.toLowerCase().includes(query) ||
+    (conn.customName && conn.customName.toLowerCase().includes(query)) ||
     conn.id.toLowerCase().includes(query)
   );
 });
@@ -47,25 +49,16 @@ const stats = computed(() => {
 // --- Formatting ---
 const formatDateTime = (dateStr: string | Date) => {
   const date = new Date(dateStr);
-  // Use Intl for better locale-aware formatting based on the i18n locale
   try {
-    // Pass the current i18n locale to ensure consistency
     return new Intl.DateTimeFormat(locale.value, {
       month: 'short', day: 'numeric',
-      hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false // Adjust options as needed
+      hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
     }).format(date);
   } catch (e) {
-    // Fallback if Intl fails or locale is unsupported by browser's Intl
     console.warn("Intl.DateTimeFormat failed for locale:", locale.value, e);
-    return date.toLocaleString(); // Use basic fallback
+    return date.toLocaleString();
   }
 };
-
-// const formatDateTime = (dateStr: string | Date) => {
-//   const date = new Date(dateStr);
-//   // Consider using locale-aware formatting for better i18n
-//   return date.toLocaleString();
-// };
 
 const formatDuration2 = (dateStr: string | Date): string => {
   const date = new Date(dateStr);
@@ -93,10 +86,11 @@ const switchLocale = (code: string) => {
 }
 
 
-// --- API Calls ---
+// --- API Calls & Actions ---
 const fetchConnections = async () => {
   loading.value = true;
   error.value = null;
+  updateError.value = null; // Clear update error on fetch
   try {
     connections.value = await apiClient.getConnectionStatus();
     lastRefreshed.value = new Date();
@@ -117,10 +111,49 @@ const refreshData = async () => {
 const closeConnection = async (id: string) => {
   try {
     await apiClient.closeConnection(id);
-    await fetchConnections();
+    await fetchConnections(); // Refresh list after closing
   } catch (err) {
     console.error('closeConnection error:', err);
-    error.value = t('error.closeConnectionFailed', { id }); // Ensure this key exists
+    error.value = t('error.closeConnectionFailed', { id });
+  }
+};
+
+const startEditingName = (conn: ActiveConnection) => {
+  editingConnectionId.value = conn.id;
+  editingName.value = conn.customName || ''; // Start with current name or empty string
+  updateError.value = null; // Clear previous update errors
+  // Focus the input field after it's rendered
+  nextTick(() => {
+    editInputRef.value?.focus();
+  });
+};
+
+const cancelEditName = () => {
+  editingConnectionId.value = null;
+  editingName.value = '';
+  updateError.value = null;
+};
+
+const saveEditName = async (id: string) => {
+  if (editingConnectionId.value !== id) return; // Should not happen, but safety check
+  const newName = editingName.value.trim(); // Trim whitespace
+  updateError.value = null; // Clear previous error
+
+  // Optional: Add validation if needed (e.g., prevent saving empty name if desired)
+  // if (!newName) {
+  //   updateError.value = t('error.customNameCannotBeEmpty'); // Add translation key
+  //   return;
+  // }
+
+  try {
+    await apiClient.updateConnectionName(id, newName);
+    editingConnectionId.value = null; // Exit edit mode
+    editingName.value = '';
+    await fetchConnections(); // Refresh data to show the updated name
+  } catch (err) {
+    console.error('updateConnectionName error:', err);
+    const message = t('error.updateNameFailed');
+    updateError.value = `${t('error.updateFailedPrefix')}: ${message}`;
   }
 };
 
@@ -241,7 +274,6 @@ onMounted(() => {
       </div>
     </div>
 
-
     <!-- Search Box -->
     <div class="mb-6">
       <div class="relative">
@@ -254,7 +286,7 @@ onMounted(() => {
         </div>
         <input v-model="searchQuery" type="search"
           class="block w-full p-3 pl-10 text-sm text-gray-900 border border-gray-300 rounded-lg bg-white focus:ring-indigo-500 focus:border-indigo-500"
-          :placeholder="t('search.placeholder')" />
+          :placeholder="t('search.placeholderConnections')" />
       </div>
     </div>
 
@@ -263,7 +295,7 @@ onMounted(() => {
       <div class="loading loading-spinner loading-lg text-indigo-500"></div>
     </div>
 
-    <!-- Error Message -->
+    <!-- Error Message (General Fetch Error) -->
     <div v-else-if="error" class="alert alert-error shadow-lg mb-6">
       <div>
         <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current flex-shrink-0 h-6 w-6" fill="none"
@@ -275,6 +307,21 @@ onMounted(() => {
       </div>
       <div class="flex-none">
         <button @click="fetchConnections" class="btn btn-sm">{{ t('button.retry') }}</button>
+      </div>
+    </div>
+
+    <!-- Update Error Message -->
+    <div v-if="updateError" class="alert alert-warning shadow-lg mb-6">
+      <div>
+        <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current flex-shrink-0 h-6 w-6" fill="none"
+          viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+        </svg>
+        <span>{{ updateError }}</span>
+      </div>
+      <div class="flex-none">
+        <button @click="updateError = null" class="btn btn-sm btn-ghost">{{ t('button.dismiss') }}</button>
       </div>
     </div>
 
@@ -306,6 +353,7 @@ onMounted(() => {
             <div class="badge" :class="conn.relaying ? 'badge-success' : 'badge-warning'">
               {{ conn.relaying ? t('status.active') : t('status.idle') }}
             </div>
+            <!-- Keep dropdown if other actions are needed, otherwise it can be removed -->
             <div class="dropdown dropdown-end">
               <label tabindex="0" class="btn btn-ghost btn-xs">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24"
@@ -315,21 +363,51 @@ onMounted(() => {
                 </svg>
               </label>
               <ul tabindex="0" class="dropdown-content z-[1] menu p-2 shadow bg-base-100 rounded-box w-52">
+                <li><a @click="startEditingName(conn)">{{ t('action.editName') }}</a></li>
                 <li><a @click="closeConnection(conn.id)">{{ t('action.closeConnection') }}</a></li>
               </ul>
             </div>
           </div>
 
-          <!-- Card Title & ID -->
-          <h2 class="card-title text-lg font-medium text-gray-700 mt-2 truncate" :title="conn.reqAddr">
-            {{ conn.reqAddr }}
-          </h2>
-          <div class="text-xs text-gray-500 mb-3 truncate" :title="conn.id">
-            ID: {{ conn.id }}
+          <!-- Card Title (Custom Name / Req Addr) & Edit Input -->
+          <div class="mt-2 min-h-[60px]">
+            <div v-if="editingConnectionId !== conn.id" class="flex items-center group">
+              <!-- Display Custom Name if available, otherwise Req Addr -->
+              <h2 class="card-title text-lg font-medium text-gray-700 truncate flex-grow"
+                :title="conn.customName || conn.reqAddr">
+                {{ conn.customName || conn.reqAddr }}
+              </h2>
+              <!-- Edit Icon - shows on hover -->
+              <button @click="startEditingName(conn)"
+                class="btn btn-ghost btn-xs ml-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                :aria-label="t('action.editName')">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24"
+                  stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                </svg>
+              </button>
+            </div>
+            <!-- Edit Name Input Form -->
+            <div v-else class="flex items-center gap-2">
+              <input ref="editInputRef" type="text" v-model="editingName" @keyup.enter="saveEditName(conn.id)"
+                @keyup.esc="cancelEditName" class="input input-sm flex-grow"
+                :placeholder="t('placeholder.customName')" />
+              <button @click="saveEditName(conn.id)" class="btn btn-success btn-xs"
+                :aria-label="t('button.save')">✓</button>
+              <button @click="cancelEditName" class="btn btn-ghost btn-xs" :aria-label="t('button.cancel')">✕</button>
+            </div>
+            <!-- Subtitle: Req Addr (if custom name exists) and ID -->
+            <div class="text-xs text-gray-500 mt-1 truncate" :title="conn.id">
+              <span v-if="conn.customName">{{ conn.reqAddr }}<br /></span>
+              <!-- Show ReqAddr below if custom name exists -->
+              ID: {{ conn.id }}
+            </div>
           </div>
 
+
           <!-- Connection Details Grid -->
-          <div class="grid grid-cols-2 gap-2 text-sm">
+          <div class="grid grid-cols-2 gap-2 text-sm mt-3"> <!-- Adjusted margin -->
             <div class="flex flex-col">
               <span class="text-gray-500">{{ t('connection.connectTime') }}</span>
               <span class="font-medium">{{ formatDateTime(conn.connectTime) }}</span>
@@ -392,5 +470,10 @@ onMounted(() => {
 
 .card:hover {
   transform: translateY(-3px);
+}
+
+/* Ensure edit icon is vertically centered */
+.group .btn-ghost {
+  vertical-align: middle;
 }
 </style>

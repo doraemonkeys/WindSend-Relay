@@ -22,6 +22,7 @@ export interface PaginatedData<T> {
 
 export interface HistoryStatistic {
   id: string;
+  customName: string;
   createdAt: string | Date;
   updatedAt: string | Date;
   totalRelayCount: number;
@@ -34,6 +35,7 @@ export interface HistoryStatistic {
 
 export interface ActiveConnection {
   id: string;
+  customName: string;
   reqAddr: string;
   connectTime: string | Date;
   lastActive: string | Date;
@@ -58,6 +60,11 @@ export interface LoginRequest {
   password: string;
 }
 
+
+export interface ReqUpdateConnection {
+  id: string;
+  customName: string;
+}
 
 
 export class ApiClient {
@@ -201,6 +208,19 @@ export class ApiClient {
       // No return value expected on success typically
     } catch (error) {
       console.error(`Failed to close connection ${id}:`, error);
+      throw error;
+    }
+  }
+
+  async updateConnectionName(id: string, customName: string): Promise<void> {
+    try {
+      const params: ReqUpdateConnection = {
+        id,
+        customName,
+      }
+      await this.axiosInstance.post('/conn/update', params);
+    } catch (error) {
+      console.error(`Failed to update connection ${id}:`, error);
       throw error;
     }
   }

@@ -24,6 +24,7 @@ type PaginatedData[T any] struct {
 
 type HistoryStatistic struct {
 	ID                     string    `json:"id"`
+	CustomName             string    `json:"customName"`
 	TotalRelayCount        int       `json:"totalRelayCount"`
 	TotalRelayErrCount     int       `json:"totalRelayErrCount"`
 	TotalRelayOfflineCount int       `json:"totalRelayOfflineCount"`
@@ -35,6 +36,7 @@ type HistoryStatistic struct {
 
 type ActiveConnection struct {
 	ID          string           `json:"id"`
+	CustomName  string           `json:"customName"`
 	ReqAddr     string           `json:"reqAddr"`
 	ConnectTime time.Time        `json:"connectTime"`
 	LastActive  time.Time        `json:"lastActive"`
@@ -49,3 +51,8 @@ type ReqHistoryStatistic struct {
 
 // sort by TotalRelayCount, TotalRelayMs, TotalRelayBytes
 type RespHistoryStatistic = PaginatedData[HistoryStatistic]
+
+type ReqUpdateConnection struct {
+	ID         string `json:"id"`
+	CustomName string `json:"customName"`
+}

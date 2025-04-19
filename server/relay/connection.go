@@ -20,8 +20,9 @@ type Connection struct {
 	Conn        net.Conn
 	LastActive  time.Time
 	ConnectTime time.Time
-	Relaying    bool
-	Mu          sync.Mutex
+	// Lock immediately after locking, set to false after unlocking
+	Relaying bool
+	Mu       sync.Mutex
 }
 
 // Be careful of deadlocks
@@ -39,7 +40,7 @@ func (c *Connection) sendMsgDetectAlive() (alive bool) {
 
 	err := protocol.SendHeartbeat(c.Conn, c.ID, c.Cipher)
 	if err != nil {
-		l.Error("sent heartbeat failed(detect alive)", zap.Error(err))
+		l.Warn("sent heartbeat failed(detect alive)", zap.Error(err))
 		return false
 	}
 	result := make(chan error, 1)
