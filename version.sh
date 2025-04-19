@@ -6,7 +6,7 @@
 #     exit 1
 # fi
 
-PROJECT_VERSION_FILE_PATH="version/version.go"
+PROJECT_VERSION_FILE_PATH="/server/version/version.go"
 
 if [ -z "$PROJECT_VERSION" ]; then
     read -rp "PROJECT_VERSION:v" PROJECT_VERSION
