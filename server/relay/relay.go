@@ -15,6 +15,7 @@ import (
 	"github.com/doraemonkeys/WindSend-Relay/relay/auth"
 	"github.com/doraemonkeys/WindSend-Relay/storage"
 	"github.com/doraemonkeys/WindSend-Relay/tool"
+	"github.com/doraemonkeys/doraemon"
 	"github.com/doraemonkeys/doraemon/crypto"
 	"go.uber.org/zap"
 )
@@ -32,6 +33,8 @@ type Relay struct {
 		limit int
 	}
 	keyConnLimitMu sync.RWMutex
+	idRateLimiter  *doraemon.RateLimiter
+	ipRateLimiter  *doraemon.RateLimiter
 }
 
 func NewRelay(config config.Config, storage storage.Storage) *Relay {
@@ -68,6 +71,8 @@ func NewRelay(config config.Config, storage storage.Storage) *Relay {
 		storage:       storage,
 		keyConnLimit:  connLimit,
 		connections:   make(map[string]*Connection),
+		idRateLimiter: doraemon.NewRateLimiter(120, time.Minute, 6),
+		ipRateLimiter: doraemon.NewRateLimiter(1000, time.Minute, 6),
 	}
 }
 
@@ -131,6 +136,12 @@ func (r *Relay) GetConnectionStatus(id string) (ConnectionStatus, bool) {
 }
 
 func (r *Relay) mainProcess(conn net.Conn) {
+	if !r.ipRateLimiter.Allow(conn.RemoteAddr().String()) {
+		zap.L().Error("IP rate limit exceeded", zap.String("addr", conn.RemoteAddr().String()))
+		_ = conn.Close()
+		return
+	}
+
 	cipher, authKey, err := protocol.Handshake(conn, r.authenticator, r.config.EnableAuth)
 	if err == protocol.ErrEmptyKDFSalt {
 		cipher, authKey, err = protocol.Handshake(conn, r.authenticator, r.config.EnableAuth)
@@ -146,6 +157,7 @@ func (r *Relay) mainProcess(conn net.Conn) {
 		_ = conn.Close()
 		return
 	}
+
 	switch head.Action {
 	case protocol.ActionConnect:
 		r.handleConnect(conn, head, cipher, authKey)
@@ -187,6 +199,12 @@ func (r *Relay) handleConnect(conn net.Conn, head protocol.ReqHead, cipher crypt
 		return
 	}
 	zap.L().Debug("Connection request", zap.String("id", req.ID))
+
+	if !r.idRateLimiter.Allow(req.ID) {
+		zap.L().Error("ID rate limit exceeded", zap.String("id", req.ID))
+		_ = protocol.SendRespHeadError(conn, head.Action, "ID rate limit exceeded", cipher)
+		return
+	}
 
 	if authKey != nil {
 		authKeyB64 := base64.StdEncoding.EncodeToString(authKey)
@@ -338,6 +356,12 @@ func (r *Relay) handleRelay(conn net.Conn, head protocol.ReqHead, cipher crypto.
 	req, err := protocol.ReadReq[protocol.RelayReq](conn, head.DataLen, cipher)
 	if err != nil {
 		l.Error("Failed to read relay request", zap.Error(err))
+		return
+	}
+
+	if !r.idRateLimiter.Allow(req.ID) {
+		zap.L().Error("ID rate limit exceeded", zap.String("id", req.ID))
+		_ = protocol.SendRespHeadError(conn, head.Action, "ID rate limit exceeded", cipher)
 		return
 	}
 

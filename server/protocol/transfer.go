@@ -68,6 +68,10 @@ func ReadReqHead(conn net.Conn, cipher crypto.SymmetricCipher) (ReqHead, error) 
 }
 
 func ReadReq[T any](conn net.Conn, dataLen int, cipher ...crypto.SymmetricCipher) (T, error) {
+	const maxItemLen = 1024 * 10
+	if dataLen > maxItemLen {
+		return *new(T), fmt.Errorf("req len too large: %d", dataLen)
+	}
 	var req T
 	var reqBuf = make([]byte, dataLen)
 	if _, err := io.ReadFull(conn, reqBuf[:dataLen]); err != nil {
