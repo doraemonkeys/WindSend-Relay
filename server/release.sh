@@ -1,7 +1,7 @@
 #!/bin/bash
 
 BIN_NAME=WindSend-Relay
-GO_PACKAGE_NAME=github.com/doraemonkeys/WindSend-Relay
+GO_PACKAGE_NAME=github.com/doraemonkeys/WindSend-Relay/server
 ZIP_NAME_PREFIX=WindSend-Relay
 BIN_DIR=$(
     mkdir -p dist

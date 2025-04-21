@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/doraemonkeys/WindSend-Relay/storage/acl/model"
+	"github.com/doraemonkeys/WindSend-Relay/server/storage/acl/model"
 	"gorm.io/gen"
 )
 

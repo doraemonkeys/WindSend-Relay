@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/doraemonkeys/WindSend-Relay/relay/auth"
-	"github.com/doraemonkeys/WindSend-Relay/tool"
+	"github.com/doraemonkeys/WindSend-Relay/server/relay/auth"
+	"github.com/doraemonkeys/WindSend-Relay/server/tool"
 	"github.com/doraemonkeys/doraemon/crypto"
 	"go.uber.org/zap"
 )

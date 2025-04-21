@@ -5,7 +5,7 @@ import (
 	"math/rand/v2"
 	"time"
 
-	"github.com/doraemonkeys/WindSend-Relay/protocol"
+	"github.com/doraemonkeys/WindSend-Relay/server/protocol"
 	"go.uber.org/zap"
 )
 

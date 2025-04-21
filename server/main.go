@@ -1,11 +1,11 @@
 package main
 
 import (
-	"github.com/doraemonkeys/WindSend-Relay/admin"
-	"github.com/doraemonkeys/WindSend-Relay/config"
-	"github.com/doraemonkeys/WindSend-Relay/global"
-	"github.com/doraemonkeys/WindSend-Relay/relay"
-	"github.com/doraemonkeys/WindSend-Relay/storage"
+	"github.com/doraemonkeys/WindSend-Relay/server/admin"
+	"github.com/doraemonkeys/WindSend-Relay/server/config"
+	"github.com/doraemonkeys/WindSend-Relay/server/global"
+	"github.com/doraemonkeys/WindSend-Relay/server/relay"
+	"github.com/doraemonkeys/WindSend-Relay/server/storage"
 )
 
 func main() {

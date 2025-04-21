@@ -8,7 +8,7 @@ import (
 	"os"
 
 	"github.com/caarlos0/env/v11"
-	"github.com/doraemonkeys/WindSend-Relay/version"
+	"github.com/doraemonkeys/WindSend-Relay/server/version"
 	"github.com/doraemonkeys/doraemon"
 )
 

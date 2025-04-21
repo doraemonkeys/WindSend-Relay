@@ -1,4 +1,4 @@
-module github.com/doraemonkeys/WindSend-Relay
+module github.com/doraemonkeys/WindSend-Relay/server
 
 go 1.24
 

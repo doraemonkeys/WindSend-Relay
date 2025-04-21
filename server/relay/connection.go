@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/doraemonkeys/WindSend-Relay/protocol"
+	"github.com/doraemonkeys/WindSend-Relay/server/protocol"
 	"github.com/doraemonkeys/doraemon/crypto"
 	"go.uber.org/zap"
 )

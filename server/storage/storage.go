@@ -5,9 +5,9 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/doraemonkeys/WindSend-Relay/pkg"
-	"github.com/doraemonkeys/WindSend-Relay/storage/acl/model"
-	"github.com/doraemonkeys/WindSend-Relay/storage/acl/query"
+	"github.com/doraemonkeys/WindSend-Relay/server/pkg"
+	"github.com/doraemonkeys/WindSend-Relay/server/storage/acl/model"
+	"github.com/doraemonkeys/WindSend-Relay/server/storage/acl/query"
 	"github.com/iancoleman/strcase"
 	"go.uber.org/zap"
 	"gorm.io/gen/field"

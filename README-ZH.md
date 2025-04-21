@@ -3,7 +3,7 @@
 
 # WindSend-中继服务器
 
-[![Go Report Card](https://goreportcard.com/badge/github.com/doraemonkeys/WindSend-Relay)](https://goreportcard.com/report/github.com/doraemonkeys/WindSend-Relay)
+[![Go Report Card](https://goreportcard.com/badge/github.com/doraemonkeys/WindSend-Relay/server)](https://goreportcard.com/report/github.com/doraemonkeys/WindSend-Relay/server)
 [![LICENSE](https://img.shields.io/github/license/doraemonkeys/WindSend-Relay)](https://github.com/doraemonkeys/WindSend-Relay/blob/main/LICENSE)
 
 

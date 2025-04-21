@@ -24,8 +24,8 @@ RUN echo "BUILD_TIME: ${BUILD_TIME}"
 # Inject version information using ldflags
 RUN go build \
     -ldflags="-w -s \
-    -X 'github.com/doraemonkeys/WindSend-Relay/version.BuildHash=${BUILD_HASH}' \
-    -X 'github.com/doraemonkeys/WindSend-Relay/version.BuildTime=${BUILD_TIME}'" \
+    -X 'github.com/doraemonkeys/WindSend-Relay/server/version.BuildHash=${BUILD_HASH}' \
+    -X 'github.com/doraemonkeys/WindSend-Relay/server/version.BuildTime=${BUILD_TIME}'" \
     -o /windsend-relay main.go
 
 # Stage 2: Build the Admin UI frontend
