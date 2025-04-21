@@ -86,7 +86,7 @@ func (s Storage) GetRelayStatistic(id string) (*model.RelayStatistic, error) {
 	return stat, nil
 }
 
-func (s Storage) AddRelayStatistic(id string, success bool, ms int, bytes int64) {
+func (s Storage) AddRelayStatistic(id string, success bool, offline bool, ms int, bytes int64) {
 	q := query.Use(s.db)
 	q.Transaction(func(tx *query.Query) error {
 		stat, err := tx.RelayStatistic.Where(tx.RelayStatistic.ID.Eq(id)).FirstOrCreate()
@@ -97,8 +97,11 @@ func (s Storage) AddRelayStatistic(id string, success bool, ms int, bytes int64)
 		stat.TotalRelayCount++
 		stat.TotalRelayMs += int64(ms)
 		stat.TotalRelayBytes += bytes
-		if !success {
+		if !success && !offline {
 			stat.TotalRelayErrCount++
+		}
+		if offline {
+			stat.TotalRelayOfflineCount++
 		}
 		r, err := tx.RelayStatistic.Where(tx.RelayStatistic.ID.Eq(id)).Updates(stat)
 		if err != nil {

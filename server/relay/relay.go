@@ -332,6 +332,7 @@ func (r *Relay) handleRelay(conn net.Conn, head protocol.ReqHead, cipher crypto.
 	now := time.Now()
 	relaySuccess := false
 	relayDataLen := int64(0)
+	relayOffline := false
 
 	l := zap.L().With(zap.String("Action", "Relay"), zap.String("ReqAddr", conn.RemoteAddr().String()))
 	req, err := protocol.ReadReq[protocol.RelayReq](conn, head.DataLen, cipher)
@@ -343,15 +344,15 @@ func (r *Relay) handleRelay(conn net.Conn, head protocol.ReqHead, cipher crypto.
 	l = l.With(zap.String("ID", req.ID))
 	l.Info("Relay request")
 	defer func() {
-		r.storage.AddRelayStatistic(req.ID, relaySuccess, int(time.Since(now).Milliseconds()), relayDataLen)
+		r.storage.AddRelayStatistic(req.ID, relaySuccess, relayOffline, int(time.Since(now).Milliseconds()), relayDataLen)
 	}()
 
 	r.connectionsMu.RLock()
 	targetConn, ok := r.connections[req.ID]
 	r.connectionsMu.RUnlock()
 	if !ok {
-		l.Error("device not online")
-		r.storage.IncrementRelayOfflineCount(req.ID)
+		l.Info("device not online", zap.String("id", req.ID))
+		relayOffline = true
 		err := protocol.SendRespHeadError(conn, protocol.ActionRelay, "device not online", cipher)
 		if err != nil {
 			l.Error("Failed to send error", zap.Error(err))
