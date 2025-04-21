@@ -407,6 +407,7 @@ func (r *Relay) handleRelay(conn net.Conn, head protocol.ReqHead, cipher crypto.
 	targetConn.Relaying = true
 	defer func() {
 		if !relaySuccess {
+			r.RemoveLongConnection(targetConn.ID)
 			return
 		}
 		go func() {
@@ -429,7 +430,6 @@ func (r *Relay) handleRelay(conn net.Conn, head protocol.ReqHead, cipher crypto.
 	err = r.relay(targetConn, conn, &relayDataLen)
 	if err != nil {
 		l.Error("relay data failed", zap.Error(err))
-		r.RemoveLongConnection(targetConn.ID)
 		return
 	}
 	zap.L().Debug("relay data success", zap.String("targetConn", targetConn.ID),
