@@ -10,6 +10,33 @@
 
 WindSend-Relay is a Go implementation of the [WindSend](https://github.com/doraemonkeys/WindSend) relay server. WindSend uses TLS certificates for authentication and encrypts the relay traffic, ensuring data security even when using third-party relay servers.
 
+## Quick Start with Docker
+
+1. Pull the latest image
+
+   ```bash
+   docker pull doraemonkey/windsend-relay:latest
+   ```
+
+2. Show version information
+
+   ```bash
+   docker run --rm doraemonkey/windsend-relay:latest -version
+   ```
+
+3. Run the container
+
+   ```bash
+   docker run -d \
+   --name ws-relay \
+   -p 16779:16779 \
+   -p 16780:16780 \
+   -e WS_MAX_CONN="100" \
+   doraemonkey/windsend-relay:latest
+   # Admin password will be generated and shown in docker logs.
+   ```
+
+> Port 16779 is used for relay traffic (protocol: TCP), and port 16780 is used for the web interface (protocol: HTTP).
 
 
 ## Installation
@@ -133,17 +160,17 @@ services:
     container_name: windsend-relay-app
     restart: unless-stopped
     ports:
-      - "16779:16779" # Relay traffic port
-      - "16780:16780" # Web Admin Interface port
+      - "16779:16779" # Relay traffic port(protocol: TCP)
+      - "16780:16780" # Web Interface port(protocol: HTTP)
     environment:
       # --- Basic Relay Configuration ---
       WS_LISTEN_ADDR: "0.0.0.0:16779"
       WS_MAX_CONN: "100"             # Overall max connections (adjust as needed)
       WS_LOG_LEVEL: "INFO"
 
-      # --- Authentication & Whitelisting ---
+      # --- Authentication ---
       WS_ENABLE_AUTH: "true"         # Set to "false" to disable authentication
-      # Configure EITHER SecretInfo OR IDWhitelist based on your needs.
+      # Configure SecretInfo.
 
       # Example: Using Secret Keys (WS_SECRET prefix)
       # Add more WS_SECRET_<index>_* variables for multiple secrets. Index starts at 0.

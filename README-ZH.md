@@ -11,6 +11,34 @@
 WindSend-Relay 是 [WindSend](https://github.com/doraemonkeys/WindSend) 中继服务器的 Go 语言实现。WindSend 使用 TLS 证书进行身份验证并加密中继流量，即使在使用第三方中继服务器时也能确保数据安全。
 
 
+## 使用 Docker 快速开始
+
+1. 拉取最新镜像
+
+   ```bash
+   docker pull doraemonkey/windsend-relay:latest
+   ```
+
+2. 显示版本信息
+
+   ```bash
+   docker run --rm doraemonkey/windsend-relay:latest -version
+   ```
+
+3. 运行容器
+
+   ```bash
+   docker run -d \
+   --name ws-relay \
+   -p 16779:16779 \
+   -p 16780:16780 \
+   -e WS_MAX_CONN="100" \
+   doraemonkey/windsend-relay:latest
+   # 后台管理密码将被生成并显示在 Docker 日志中。
+   ```
+
+> 16779 端口用于中继流量（协议：TCP），16780 端口用于后台页面（协议：HTTP）。
+
 
 ## 安装
 
@@ -134,17 +162,17 @@ services:
     container_name: windsend-relay-app
     restart: unless-stopped
     ports:
-      - "16779:16779" # 中继端口
-      - "16780:16780" # 管理后台 UI 端口
+      - "16779:16779" # 中继端口（协议：TCP）
+      - "16780:16780" # 后台 UI 端口（协议：HTTP）
     environment:
       # --- 基本中继配置 ---
       WS_LISTEN_ADDR: "0.0.0.0:16779"
       WS_MAX_CONN: "100"             # 全局最大连接数（按需调整）
       WS_LOG_LEVEL: "INFO"
 
-      # --- 认证与白名单 ---
+      # --- 认证 ---
       WS_ENABLE_AUTH: "true"         # 设置为 "false" 禁用身份验证
-      # 根据您的需求配置 SecretInfo 或 IDWhitelist 中的一个。
+      # 根据您的需求配置 SecretInfo 。
 
       # 示例：使用密钥（WS_SECRET 前缀）
       # 为多个密钥添加更多 WS_SECRET_<index>_* 变量。索引从 0 开始。
