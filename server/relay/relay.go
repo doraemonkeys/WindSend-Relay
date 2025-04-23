@@ -45,11 +45,11 @@ func NewRelay(config config.Config, storage storage.Storage) *Relay {
 	}
 
 	at := auth.NewAuthentication(rawSecretKeys)
+	rawKeyToAES192Key := at.GetAllAuthKeys()
 	if len(rawSecretKeys) == 0 {
 		zap.L().Warn("No secret keys, authentication is disabled")
 		at = nil
 	}
-	rawKeyToAES192Key := at.GetAllAuthKeys()
 	connLimit := make(map[string]*struct {
 		count atomic.Int32
 		limit int
