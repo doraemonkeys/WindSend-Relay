@@ -6,9 +6,12 @@ import (
 	"github.com/doraemonkeys/WindSend-Relay/server/global"
 	"github.com/doraemonkeys/WindSend-Relay/server/relay"
 	"github.com/doraemonkeys/WindSend-Relay/server/storage"
+	"github.com/doraemonkeys/WindSend-Relay/server/version"
 )
 
 func main() {
+	version.PrintVersion()
+
 	cfg := config.ParseConfig()
 	global.InitLogger(cfg.LogLevel)
 

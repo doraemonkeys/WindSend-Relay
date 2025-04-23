@@ -3,13 +3,11 @@ package config
 import (
 	"encoding/json"
 	"flag"
-	"fmt"
 	"log"
 	"os"
 
 	"github.com/caarlos0/env/v11"
 	"github.com/doraemonkeys/WindSend-Relay/server/version"
-	"github.com/doraemonkeys/doraemon"
 )
 
 const DBPath = "data/relay.db"
@@ -43,15 +41,14 @@ func ParseConfig() *Config {
 
 	var config Config
 	flag.StringVar(&config.ListenAddr, "listen-addr", "0.0.0.0:16779", "listen address")
+	flag.StringVar(&config.AdminConfig.Addr, "admin-addr", "0.0.0.0:16780", "admin address")
 	flag.IntVar(&config.MaxConn, "max-conn", 100, "max connection")
 	flag.StringVar(&config.LogLevel, "log-level", "INFO", "log level")
 	showVersion := flag.Bool("version", false, "show version")
 	flag.Parse()
 
 	if *showVersion {
-		fmt.Println("WindSend-Relay", "v"+version.Version)
-		fmt.Println("BuildTime:", version.BuildTime)
-		fmt.Println("BuildHash:", version.BuildHash)
+		version.PrintVersion()
 		os.Exit(0)
 	}
 
@@ -59,13 +56,13 @@ func ParseConfig() *Config {
 
 	if *useEnv {
 		log.Println("parse config from env")
-		return parseEnv()
+		c := parseEnv()
+		config = *c
+		return &config
 	}
 
 	if *configFile != "" {
 		log.Println("parse config from file", *configFile)
-		config.AdminConfig.Addr = "0.0.0.0:16780"
-		config.AdminConfig.User = "admin"
 		jsonFile, err := os.Open(*configFile)
 		if err != nil {
 			log.Fatal("Failed to open config file", err)
@@ -86,12 +83,7 @@ func amendConfig(config *Config) {
 		log.Println("generated admin user", config.AdminConfig.User)
 	}
 	const adminPasswordLength = 12
-	if config.AdminConfig.Password == "" {
-		config.AdminConfig.Password = doraemon.GenRandomAsciiString(adminPasswordLength)
-		log.Println("generated admin password", config.AdminConfig.Password)
-	}
-	if len(config.AdminConfig.Password) < adminPasswordLength {
-		config.AdminConfig.Password = doraemon.GenRandomAsciiString(adminPasswordLength)
+	if config.AdminConfig.Password != "" && len(config.AdminConfig.Password) < adminPasswordLength {
 		log.Fatal("password must be at least", adminPasswordLength, "characters")
 	}
 }

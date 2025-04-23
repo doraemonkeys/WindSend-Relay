@@ -2,6 +2,7 @@ package admin
 
 import (
 	"crypto/rand"
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -44,7 +45,23 @@ func NewAdminServer(relay *relay.Relay, storage storage.Storage, cfg *config.Adm
 			zap.L().Fatal("failed to set admin salt", zap.Error(err))
 		}
 	}
-	ph := tool.AES192KeyKDF(cfg.Password, salt)
+	if cfg.Password == "" {
+		// zap.L().Fatal("unexpected: admin password is empty")
+		cfg.Password, err = storage.GetAdminPassword()
+		if err != nil {
+			zap.L().Fatal("failed to get admin password", zap.Error(err))
+		}
+		if cfg.Password == "" {
+			cfg.Password = doraemon.GenRandomAsciiString(14)
+			err = storage.SetAdminPassword(cfg.Password)
+			if err != nil {
+				zap.L().Fatal("failed to set admin password", zap.Error(err))
+			}
+			zap.L().Info(fmt.Sprintf("admin user: %s", cfg.User))
+			zap.L().Info(fmt.Sprintf("generated admin password: %s", cfg.Password))
+		}
+	}
+	ph := tool.AES192KeyKDF2(cfg.Password, salt)
 	j, err := jwt.NewHS256JWT[string](ph)
 	if err != nil {
 		zap.L().Fatal("failed to create jwt", zap.Error(err))
@@ -93,6 +110,7 @@ func (s *AdminServer) SetupRouter() {
 
 func (s *AdminServer) Run() {
 	s.SetupRouter()
+	zap.L().Info("admin server running", zap.String("addr", s.cfg.Addr))
 	err := s.router.Run(s.cfg.Addr)
 	if err != nil {
 		zap.L().Fatal("failed to run admin server", zap.Error(err))

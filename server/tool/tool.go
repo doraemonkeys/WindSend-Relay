@@ -42,3 +42,12 @@ func AES192KeyKDF(password string, salt []byte) AES192Key {
 	}
 	return key
 }
+
+func AES192KeyKDF2(password string, salt []byte) AES192Key {
+	iterations := 200000
+	key, err := pbkdf2.Key(sha256.New, password, salt, iterations, 192/8)
+	if err != nil {
+		panic("unreachable: " + err.Error())
+	}
+	return key
+}
