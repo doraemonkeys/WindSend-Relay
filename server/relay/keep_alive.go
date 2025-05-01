@@ -10,8 +10,9 @@ import (
 )
 
 func (r *Relay) detectConnectionAlive() {
+	const detectInterval = time.Second * 60
 	for {
-		time.Sleep(time.Second * 60)
+		time.Sleep(detectInterval)
 		if len(r.connections) == 0 {
 			continue
 		}
@@ -25,11 +26,16 @@ func (r *Relay) detectConnectionAlive() {
 
 		for _, c := range connections {
 			if c.Relaying {
-				if c.LastActive.Add(time.Hour * 6).Before(time.Now()) {
+				if c.LastNormalActive.Add(time.Hour * 6).Before(time.Now()) {
 					zap.L().Error("unexpected: connection is relaying and timeout", zap.String("id", c.ID),
 						zap.String("addr", c.Conn.RemoteAddr().String()))
 					r.RemoveLongConnection(c.ID)
 				}
+				continue
+			}
+			if time.Since(c.LastNormalActive) < detectInterval/2 {
+				zap.L().Debug("connection last active is recent, skip detect", zap.String("id", c.ID),
+					zap.String("addr", c.Conn.RemoteAddr().String()))
 				continue
 			}
 			err := c.detectAliveRandom()
@@ -57,6 +63,6 @@ func (c *Connection) detectAliveRandom() error {
 	if err != nil {
 		return err
 	}
-	c.LastActive = time.Now()
+	c.LastNormalActive = time.Now()
 	return nil
 }

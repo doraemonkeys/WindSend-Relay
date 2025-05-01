@@ -113,7 +113,7 @@ func (r *Relay) GetAllStatus() []ConnectionStatus {
 			ID:          c.ID,
 			ReqAddr:     c.Conn.RemoteAddr().String(),
 			ConnectTime: c.ConnectTime,
-			LastActive:  c.LastActive,
+			LastActive:  c.LastNormalActive,
 			Relaying:    c.Relaying,
 		})
 	}
@@ -128,7 +128,7 @@ func (r *Relay) GetConnectionStatus(id string) (ConnectionStatus, bool) {
 			ID:          c.ID,
 			ReqAddr:     c.Conn.RemoteAddr().String(),
 			ConnectTime: c.ConnectTime,
-			LastActive:  c.LastActive,
+			LastActive:  c.LastNormalActive,
 			Relaying:    c.Relaying,
 		}, true
 	}
@@ -277,13 +277,13 @@ func (r *Relay) handleConnect(conn net.Conn, head protocol.ReqHead, cipher crypt
 func (r *Relay) AddConnection(id string, conn net.Conn, authKey tool.AES192Key, cipher crypto.SymmetricCipher) {
 	r.connectionsMu.Lock()
 	c := &Connection{
-		ID:          id,
-		Conn:        conn,
-		LastActive:  time.Now(),
-		ConnectTime: time.Now(),
-		Relaying:    false,
-		AuthkeyB64:  base64.StdEncoding.EncodeToString(authKey),
-		Cipher:      cipher,
+		ID:               id,
+		Conn:             conn,
+		LastNormalActive: time.Now(),
+		ConnectTime:      time.Now(),
+		Relaying:         false,
+		AuthkeyB64:       base64.StdEncoding.EncodeToString(authKey),
+		Cipher:           cipher,
 	}
 	r.connections[id] = c
 	r.connectionsMu.Unlock()
@@ -395,7 +395,7 @@ func (r *Relay) handleRelay(conn net.Conn, head protocol.ReqHead, cipher crypto.
 
 	err = protocol.SendRespHeadOKWithMsg(conn, protocol.ActionRelay, "Relay start", cipher)
 	if err != nil {
-		l.Error("Failed to send relay start", zap.Error(err))
+		l.Error("Failed to reply to client relay start", zap.Error(err))
 		return
 	}
 
@@ -410,6 +410,7 @@ func (r *Relay) handleRelay(conn net.Conn, head protocol.ReqHead, cipher crypto.
 			r.RemoveLongConnection(targetConn.ID)
 			return
 		}
+		// run in a new goroutine to avoid deadlocks
 		go func() {
 			// zap.L().Debug("try to read relay end flag")
 			alive := targetConn.SendMsgDetectAlive()
@@ -424,7 +425,7 @@ func (r *Relay) handleRelay(conn net.Conn, head protocol.ReqHead, cipher crypto.
 	}()
 	err = protocol.SendRelayStart(targetConn.Conn, targetConn.Cipher)
 	if err != nil {
-		l.Error("Failed to send relay start", zap.Error(err))
+		l.Error("Failed to send relay start to targetConn", zap.Error(err))
 		return
 	}
 	err = r.relay(targetConn, conn, &relayDataLen)
@@ -434,7 +435,7 @@ func (r *Relay) handleRelay(conn net.Conn, head protocol.ReqHead, cipher crypto.
 	}
 	zap.L().Debug("relay data success", zap.String("targetConn", targetConn.ID),
 		zap.String("reqConn", conn.RemoteAddr().String()))
-	targetConn.LastActive = time.Now()
+	targetConn.LastNormalActive = time.Now()
 	relaySuccess = true
 }
 

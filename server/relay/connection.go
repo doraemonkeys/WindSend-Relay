@@ -17,9 +17,9 @@ type Connection struct {
 	Cipher     crypto.SymmetricCipher
 
 	// Lock when reading or writing
-	Conn        net.Conn
-	LastActive  time.Time
-	ConnectTime time.Time
+	Conn             net.Conn
+	LastNormalActive time.Time
+	ConnectTime      time.Time
 	// Lock immediately after locking, set to false after unlocking
 	Relaying bool
 	Mu       sync.Mutex
@@ -61,7 +61,7 @@ func (c *Connection) sendMsgDetectAlive() (alive bool) {
 			l.Error("Failed to receive heartbeat", zap.Error(err))
 			return false
 		}
-		c.LastActive = time.Now()
+		c.LastNormalActive = time.Now()
 		return true
 	case <-time.After(time.Second * 2):
 		return false
