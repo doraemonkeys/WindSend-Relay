@@ -448,7 +448,7 @@ func (r *Relay) relay(targetConn *Connection, reqConn net.Conn, relayDataLen *in
 		activelyTimeOut = true
 		targetConn.Conn.SetReadDeadline(time.Unix(1136142245, 0))
 		if err != nil {
-			errCH <- fmt.Errorf("relay data to client: %w", err)
+			errCH <- fmt.Errorf("reqConn -> targetConn: %w", err)
 			return
 		}
 		errCH <- nil
@@ -463,7 +463,7 @@ func (r *Relay) relay(targetConn *Connection, reqConn net.Conn, relayDataLen *in
 			return
 		}
 		if err != nil && !activelyTimeOut {
-			errCH <- fmt.Errorf("relay data to server: %w", err)
+			errCH <- fmt.Errorf("targetConn -> reqConn: %w", err)
 			return
 		}
 		errCH <- nil
