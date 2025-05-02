@@ -446,7 +446,10 @@ func (r *Relay) relay(targetConn *Connection, reqConn net.Conn, relayDataLen *in
 		n, err := io.Copy(targetConn.Conn, reqConn)
 		atomic.AddInt64(relayDataLen, int64(n))
 		activelyTimeOut = true
-		targetConn.Conn.SetReadDeadline(time.Unix(1136142245, 0))
+		setErr := targetConn.Conn.SetReadDeadline(time.Unix(1136142245, 0))
+		if setErr != nil {
+			zap.L().Error("Failed to set read deadline", zap.Error(setErr))
+		}
 		if err != nil {
 			errCH <- fmt.Errorf("reqConn -> targetConn: %w", err)
 			return
@@ -483,6 +486,9 @@ func (r *Relay) relay(targetConn *Connection, reqConn net.Conn, relayDataLen *in
 	}
 
 	// reset read deadline to avoid read timeout
-	targetConn.Conn.SetReadDeadline(time.Time{})
+	setErr := targetConn.Conn.SetReadDeadline(time.Time{})
+	if setErr != nil {
+		zap.L().Error("Failed to reset read deadline", zap.Error(setErr))
+	}
 	return nil
 }
