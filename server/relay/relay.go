@@ -461,12 +461,12 @@ func (r *Relay) relay(targetConn *Connection, reqConn net.Conn, relayDataLen *in
 		n, err := io.Copy(reqConn, targetConn.Conn)
 		atomic.AddInt64(relayDataLen, int64(n))
 		if !activelyTimeOut {
-			// reqConn.SetReadDeadline(time.Unix(1136142245, 0))
-			errCH <- fmt.Errorf("relay dst active disconnect")
-			return
-		}
-		if err != nil && !activelyTimeOut {
-			errCH <- fmt.Errorf("targetConn -> reqConn: %w", err)
+			if err != nil {
+				errCH <- fmt.Errorf("targetConn -> reqConn: %w", err)
+			} else {
+				// reqConn.SetReadDeadline(time.Unix(1136142245, 0))
+				errCH <- fmt.Errorf("relay dst actively disconnect")
+			}
 			return
 		}
 		errCH <- nil
