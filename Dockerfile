@@ -50,6 +50,17 @@ FROM alpine:latest
 
 WORKDIR /app
 
+
+#ARG TZ="Asia/Shanghai"
+#ENV TZ=${TZ}
+ENV TZ="Asia/Shanghai"
+
+# Install tzdata for timezone support.
+RUN apk add --no-cache tzdata \
+    && ln -sf /usr/share/zoneinfo/${TZ} /etc/localtime \
+    && echo ${TZ} > /etc/timezone \
+    && rm -rf /var/cache/apk/*
+
 # Copy the static Go binary from the builder stage
 COPY --from=builder /windsend-relay /app/windsend-relay
 
