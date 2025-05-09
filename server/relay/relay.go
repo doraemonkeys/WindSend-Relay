@@ -386,7 +386,13 @@ func (r *Relay) handleRelay(conn net.Conn, head protocol.ReqHead, cipher crypto.
 	// Simple processing without lock, if targetConn is relaying, return an error
 	if targetConn.Relaying {
 		// Handle the case where the two requests are too close together, and the previous connection is about to exit
-		time.Sleep(time.Millisecond * 200)
+		const maxRetry = 5
+		for range maxRetry {
+			if !targetConn.Relaying {
+				break
+			}
+			time.Sleep(time.Millisecond * 200)
+		}
 		if targetConn.Relaying {
 			l.Error("Connection is already relaying")
 			err := protocol.SendRespHeadError(conn, protocol.ActionRelay, "Connection is already relaying", cipher)
