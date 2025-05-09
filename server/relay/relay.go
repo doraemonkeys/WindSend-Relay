@@ -383,14 +383,20 @@ func (r *Relay) handleRelay(conn net.Conn, head protocol.ReqHead, cipher crypto.
 		}
 		return
 	}
-	// Simple processing, if targetConn is relaying, return an error
+	// Simple processing without lock, if targetConn is relaying, return an error
 	if targetConn.Relaying {
-		l.Error("Connection is already relaying")
-		err := protocol.SendRespHeadError(conn, protocol.ActionRelay, "Connection is already relaying", cipher)
-		if err != nil {
-			l.Error("Failed to send error", zap.Error(err))
+		// Handle the case where the two requests are too close together, and the previous connection is about to exit
+		time.Sleep(time.Millisecond * 200)
+		if targetConn.Relaying {
+			l.Error("Connection is already relaying")
+			err := protocol.SendRespHeadError(conn, protocol.ActionRelay, "Connection is already relaying", cipher)
+			if err != nil {
+				l.Error("Failed to send error", zap.Error(err))
+			}
+			return
+		} else {
+			l.Debug("Edge case: previous connection is about to exit, retry")
 		}
-		return
 	}
 
 	err = protocol.SendRespHeadOKWithMsg(conn, protocol.ActionRelay, "Relay start", cipher)
