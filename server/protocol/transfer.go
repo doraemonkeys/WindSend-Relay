@@ -21,8 +21,8 @@ func ReadHandshakeReq(conn net.Conn) (HandshakeReq, error) {
 	itemLen = int32(binary.LittleEndian.Uint32(itemBuf[:4]))
 	// The head length cannot exceed 10KB to prevent memory overflow due to malicious attacks
 	const maxItemLen = 1024 * 10
-	if itemLen > maxItemLen {
-		return item, fmt.Errorf("handshake len too large: %d", itemLen)
+	if itemLen > maxItemLen || itemLen <= 0 {
+		return item, fmt.Errorf("invalid handshake request len: %d", itemLen)
 	}
 	itemBuf = make([]byte, itemLen)
 	if _, err := io.ReadFull(conn, itemBuf[:itemLen]); err != nil {
@@ -46,8 +46,8 @@ func ReadReqHead(conn net.Conn, cipher crypto.SymmetricCipher) (ReqHead, error) 
 	itemLen = int32(binary.LittleEndian.Uint32(itemBuf[:4]))
 	// The head length cannot exceed 10KB to prevent memory overflow due to malicious attacks
 	const maxItemLen = 1024 * 10
-	if itemLen > maxItemLen {
-		return item, fmt.Errorf("head len too large: %d", itemLen)
+	if itemLen > maxItemLen || itemLen <= 0 {
+		return item, fmt.Errorf("invalid head len: %d", itemLen)
 	}
 	itemBuf = make([]byte, itemLen)
 	if _, err := io.ReadFull(conn, itemBuf[:itemLen]); err != nil {
@@ -69,8 +69,8 @@ func ReadReqHead(conn net.Conn, cipher crypto.SymmetricCipher) (ReqHead, error) 
 
 func ReadReq[T any](conn net.Conn, dataLen int, cipher ...crypto.SymmetricCipher) (T, error) {
 	const maxItemLen = 1024 * 10
-	if dataLen > maxItemLen {
-		return *new(T), fmt.Errorf("req len too large: %d", dataLen)
+	if dataLen > maxItemLen || dataLen <= 0 {
+		return *new(T), fmt.Errorf("invalid request len: %d", dataLen)
 	}
 	var req T
 	var reqBuf = make([]byte, dataLen)
