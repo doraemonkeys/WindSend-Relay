@@ -223,8 +223,8 @@ func (r *Relay) handleConnect(conn net.Conn, head protocol.ReqHead, cipher crypt
 		if c, ok := r.connections[req.ID]; ok {
 			r.connectionsMu.RUnlock()
 			if c.Relaying || c.SendMsgDetectAlive() {
-				zap.L().Error("Connection already exists", zap.String("id", req.ID))
-				err = protocol.SendRespHeadError(conn, protocol.ActionConnect, "Connection already exists", cipher)
+				zap.L().Error("Connection already exists or relaying", zap.String("id", req.ID))
+				err = protocol.SendRespHeadError(conn, protocol.ActionConnect, "Connection already exists or relaying", cipher)
 				if err != nil {
 					zap.L().Error("Failed to send error", zap.Error(err))
 				}
