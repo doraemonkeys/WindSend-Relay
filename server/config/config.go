@@ -21,11 +21,11 @@ type SecretInfo struct {
 type Config struct {
 	ListenAddr  string       `json:"listen_addr" env:"WS_LISTEN_ADDR,notEmpty" envDefault:"0.0.0.0:16779"`
 	MaxConn     int          `json:"max_conn" env:"WS_MAX_CONN" envDefault:"100"`
-	IDWhitelist []string     `json:"id_whitelist" envPrefix:"WS_ID_WHITELIST"`
+	IDWhitelist []string     `json:"id_whitelist" env:"WS_ID_WHITELIST" envSeparator:","`
 	SecretInfo  []SecretInfo `json:"secret_info" envPrefix:"WS_SECRET"`
 	EnableAuth  bool         `json:"enable_auth" env:"WS_ENABLE_AUTH" envDefault:"false"`
 	LogLevel    string       `json:"log_level" env:"WS_LOG_LEVEL" envDefault:"INFO"`
-	AdminConfig AdminConfig  `json:"admin_config" envPrefix:"WS_ADMIN"`
+	AdminConfig AdminConfig  `json:"admin_config" envPrefix:"WS_ADMIN_"`
 }
 
 type AdminConfig struct {

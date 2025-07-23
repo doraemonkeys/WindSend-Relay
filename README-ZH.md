@@ -223,7 +223,7 @@ WindSend-Relay 可以通过以下三种方式进行配置，优先级顺序如�
 | :------------------- | :-------------------- | :------------- | :-------------------------------------------- | :------------- | :------------------------------------ | :------------------------------------------------------------------------------------------------------------------- |
 | 监听地址             | `listen_addr`         | `-listen-addr` | `WS_LISTEN_ADDR`                              | `string`       | `0.0.0.0:16779`                       | 中继服务器监听的 IP 地址和端口。                                                                                     |
 | 最大连接数           | `max_conn`            | `-max-conn`    | `WS_MAX_CONN`                                 | `int`          | `100`                                 | 允许的全局最大并发客户端连接数。                                                                                       |
-| ID 白名单            | `id_whitelist`        | *N/A*          | `WS_ID_WHITELIST_<n>`                         | `[]string`     | `[]`                                  | 允许连接的客户端 ID 列表。如果为空或省略，则允许所有 ID（需通过认证）。从 0 开始索引。                               |
+| ID 白名单            | `id_whitelist`        | *N/A*          | `WS_ID_WHITELIST`                            | `[]string`     | `[]`                                  | 允许连接的客户端 ID 列表。如果为空或省略，则允许所有 ID（需通过认证）。从 0 开始索引。                               |
 | 密钥信息             | `secret_info`         | *N/A*          | `WS_SECRET_<n>_KEY`, `WS_SECRET_<n>_MAX_CONN` | `[]SecretInfo` | `[]`                                  | 用于身份验证的密钥及其关联连接限制的列表。详见下文。从 0 开始索引。                                                 |
 | 启用认证             | `enable_auth`         | *N/A*          | `WS_ENABLE_AUTH`                              | `bool`         | `false`                               | 如果为 `true`，客户端必须使用 `Secret Info` 中的有效密钥进行身份验证。                                                   |
 | 日志级别             | `log_level`           | `-log-level`   | `WS_LOG_LEVEL`                                | `string`       | `INFO`                                | 日志级别。有效值：`DEBUG`, `INFO`, `WARN`, `ERROR`, `DPANIC`, `PANIC`, `FATAL`。                                      |
@@ -238,10 +238,9 @@ WindSend-Relay 可以通过以下三种方式进行配置，优先级顺序如�
 
 **关于用于切片和嵌套结构的环境变量的说明：**
 
-*   **`WS_ID_WHITELIST_<n>`:** 对于 ID 白名单，请使用从 0 开始的索引变量。示例：
+*   **`WS_ID_WHITELIST`:** 示例：
     ```bash
-    export WS_ID_WHITELIST_0="client_id_1"
-    export WS_ID_WHITELIST_1="client_id_2"
+    export WS_ID_WHITELIST="client_id_1,client_id_2"
     ```
 *   **`WS_SECRET_<n>_KEY` / `WS_SECRET_<n>_MAX_CONN`:** 对于 Secret Info 切片，请为每个结构字段使用索引变量。示例：
     ```bash

@@ -221,7 +221,7 @@ WindSend-Relay can be configured using three methods, with the following order o
 | :------------------- | :-------------------- | :------------- | :-------------------------------------------- | :------------- | :------------------------------------ | :------------------------------------------------------------------------------------------------------------------- |
 | Listen Address       | `listen_addr`         | `-listen-addr` | `WS_LISTEN_ADDR`                              | `string`       | `0.0.0.0:16779`                       | IP address and port for the relay server to listen on.                                                              |
 | Max Connections      | `max_conn`            | `-max-conn`    | `WS_MAX_CONN`                                 | `int`          | `100`                                 | Global maximum number of concurrent client connections allowed.                                                        |
-| ID Whitelist         | `id_whitelist`        | *N/A*          | `WS_ID_WHITELIST_<n>`                         | `[]string`     | `[]`                                  | List of client IDs allowed to connect. If empty or omitted, all IDs are allowed (subject to auth). Indexed from 0.    |
+| ID Whitelist         | `id_whitelist`        | *N/A*          | `WS_ID_WHITELIST`                         | `[]string`     | `[]`                                  | List of client IDs allowed to connect. If empty or omitted, all IDs are allowed (subject to auth). Indexed from 0.    |
 | Secret Info          | `secret_info`         | *N/A*          | `WS_SECRET_<n>_KEY`, `WS_SECRET_<n>_MAX_CONN` | `[]SecretInfo` | `[]`                                  | List of secret keys for authentication and their associated connection limits. See details below. Indexed from 0. |
 | Enable Auth          | `enable_auth`         | *N/A*          | `WS_ENABLE_AUTH`                              | `bool`         | `false`                               | If `true`, clients must authenticate using a valid secret key from `Secret Info`.                                      |
 | Log Level            | `log_level`           | `-log-level`   | `WS_LOG_LEVEL`                                | `string`       | `INFO`                                | Log level. Valid values: `DEBUG`, `INFO`, `WARN`, `ERROR`, `DPANIC`, `PANIC`, `FATAL`.                                 |
@@ -236,10 +236,10 @@ WindSend-Relay can be configured using three methods, with the following order o
 
 **Notes on Environment Variables for Slices and Nested Structures:**
 
-*   **`WS_ID_WHITELIST_<n>`:** For the ID whitelist, use indexed variables starting from 0. Example:
+*   **`WS_ID_WHITELIST`:** 
+    
     ```bash
-    export WS_ID_WHITELIST_0="client_id_1"
-    export WS_ID_WHITELIST_1="client_id_2"
+    export WS_ID_WHITELIST="client_id_1,client_id_2"
     ```
 *   **`WS_SECRET_<n>_KEY` / `WS_SECRET_<n>_MAX_CONN`:** For the Secret Info slice, use indexed variables for each struct field. Example:
     ```bash
