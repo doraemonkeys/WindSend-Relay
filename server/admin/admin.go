@@ -164,7 +164,7 @@ func (s *AdminServer) handleNoRoute(c *gin.Context) {
 func (s *AdminServer) handleLogin(c *gin.Context) {
 	username := c.PostForm("username")
 	password := c.PostForm("password")
-	ph, err := doraemon.ComputeSHA256Hex(strings.NewReader(s.cfg.Password))
+	ph, err := doraemon.ComputeSHA256Hex(strings.NewReader(s.cfg.Password)).GoResult()
 	if err != nil {
 		zap.L().Error("failed to compute sha256", zap.Error(err))
 		c.JSON(http.StatusInternalServerError, gin.H{

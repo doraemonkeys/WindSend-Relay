@@ -72,10 +72,7 @@ func (a *Authentication) GetAllAuthKeys() map[string]tool.AES192Key {
 
 // return 4 bytes hash prefix encoded in hex
 func getAES192KeySelector(key tool.AES192Key) string {
-	hash, err := doraemon.ComputeSHA256Hex(bytes.NewReader(key))
-	if err != nil {
-		panic("unreachable")
-	}
+	hash := doraemon.ComputeSHA256Hex(bytes.NewReader(key)).Unwrap()
 	return hash[:8]
 }
 

@@ -14,22 +14,15 @@ func HashToAES192Key(c []byte) AES192Key {
 	// if len(c) == 0 {
 	// 	panic("unreachable: Invalid input string")
 	// }
-	hash, err := doraemon.ComputeSHA256(bytes.NewReader(c))
-	if err != nil {
-		panic("unreachable")
-	}
+	hash := doraemon.ComputeSHA256(bytes.NewReader(c)).Unwrap()
 	return hash[:192/8]
 }
 
 func HashToAES192Key2(c []byte) AES192Key {
 	iters := 300000
-	var err error
 	hash := c
 	for range iters {
-		hash, err = doraemon.ComputeSHA256(bytes.NewReader(hash))
-		if err != nil {
-			panic("unreachable")
-		}
+		hash = doraemon.ComputeSHA256(bytes.NewReader(hash)).Unwrap()
 	}
 	return hash[:192/8]
 }
