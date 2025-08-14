@@ -16,7 +16,7 @@ echo "BUILD_TIME: ${BUILD_TIME}"
 docker build \
     --build-arg BUILD_HASH="${COMMIT_HASH}" \
     --build-arg BUILD_TIME="${BUILD_TIME}" \
-    -t "${DOCKER_IMAGE_NAME}:${BUILD_TAG}" .
+    -t "${DOCKER_IMAGE_NAME}:${BUILD_TAG}" . || exit 1
 
 # latest tag
 docker tag "${DOCKER_IMAGE_NAME}:${BUILD_TAG}" "${DOCKER_IMAGE_NAME}:latest"
