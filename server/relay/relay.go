@@ -252,13 +252,14 @@ func (r *Relay) handleConnect(conn net.Conn, head protocol.ReqHead, cipher crypt
 	r.connectionsMu.RUnlock()
 
 	if c, ok := conn.(*net.TCPConn); ok {
-		err = c.SetKeepAlive(true)
+		err = c.SetKeepAliveConfig(net.KeepAliveConfig{
+			Enable:   true,
+			Idle:     time.Second * 30,
+			Interval: time.Second * 15,
+			Count:    6,
+		})
 		if err != nil {
 			zap.L().Error("Failed to set keep alive", zap.Error(err))
-		}
-		err = c.SetKeepAlivePeriod(time.Second * 30)
-		if err != nil {
-			zap.L().Error("Failed to set keep alive period", zap.Error(err))
 		}
 	}
 
@@ -412,6 +413,18 @@ func (r *Relay) handleRelay(conn net.Conn, head protocol.ReqHead, cipher crypto.
 	if err != nil {
 		l.Error("Failed to reply to client relay start", zap.Error(err))
 		return
+	}
+
+	if c, ok := conn.(*net.TCPConn); ok {
+		err = c.SetKeepAliveConfig(net.KeepAliveConfig{
+			Enable:   true,
+			Idle:     time.Second * 2,
+			Interval: time.Second * 1,
+			Count:    3,
+		})
+		if err != nil {
+			l.Error("Failed to set keep alive", zap.Error(err))
+		}
 	}
 
 	targetConn.Mu.Lock()
