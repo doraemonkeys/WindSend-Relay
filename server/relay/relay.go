@@ -198,10 +198,10 @@ func (r *Relay) handleConnect(conn net.Conn, head protocol.ReqHead, cipher crypt
 		zap.L().Error("Failed to read connection request", zap.Error(err))
 		return
 	}
-	zap.L().Debug("Connection request", zap.String("id", req.ID))
+	zap.L().Debug("Connection request", zap.String("secretKey ID", req.SecretKeyID))
 
-	if !r.idRateLimiter.Allow(req.ID) {
-		zap.L().Error("ID rate limit exceeded", zap.String("id", req.ID))
+	if !r.idRateLimiter.Allow(req.SecretKeyID) {
+		zap.L().Error("ID rate limit exceeded", zap.String("secretKey ID", req.SecretKeyID))
 		_ = protocol.SendRespHeadError(conn, head.Action, "ID rate limit exceeded", cipher)
 		return
 	}
@@ -209,7 +209,7 @@ func (r *Relay) handleConnect(conn net.Conn, head protocol.ReqHead, cipher crypt
 	if authKey != nil {
 		authKeyB64 := base64.StdEncoding.EncodeToString(authKey)
 		if !r.checkConnLimitOk(authKeyB64) {
-			zap.L().Error("Too many connections", zap.String("id", req.ID))
+			zap.L().Error("Too many connections", zap.String("secretKey ID", req.SecretKeyID))
 			err = protocol.SendRespHeadError(conn, protocol.ActionConnect, "Too many connections", cipher)
 			if err != nil {
 				zap.L().Error("Failed to send error", zap.Error(err))
@@ -220,28 +220,28 @@ func (r *Relay) handleConnect(conn net.Conn, head protocol.ReqHead, cipher crypt
 
 	r.connectionsMu.RLock()
 	{
-		if c, ok := r.connections[req.ID]; ok {
+		if c, ok := r.connections[req.SecretKeyID]; ok {
 			r.connectionsMu.RUnlock()
 			if c.Relaying {
-				zap.L().Warn("connection relay flag is true", zap.String("id", req.ID), zap.String("addr", conn.RemoteAddr().String()))
+				zap.L().Warn("connection relay flag is true", zap.String("id", req.SecretKeyID), zap.String("addr", conn.RemoteAddr().String()))
 			}
 			if c.SendMsgDetectAlive() {
-				zap.L().Error("Connection already exists", zap.String("id", req.ID))
+				zap.L().Error("Connection already exists", zap.String("id", req.SecretKeyID))
 				err = protocol.SendRespHeadError(conn, protocol.ActionConnect, "Connection already exists", cipher)
 				if err != nil {
 					zap.L().Error("Failed to send error", zap.Error(err))
 				}
 				return
 			}
-			zap.L().Info("Existing connection not active, removing it", zap.String("id", req.ID))
-			r.RemoveLongConnection(req.ID)
+			zap.L().Info("Existing connection not active, removing it", zap.String("id", req.SecretKeyID))
+			r.RemoveLongConnection(req.SecretKeyID)
 
 			r.connectionsMu.RLock()
 		}
 		if len(r.connections) >= r.config.MaxConn {
 			r.connectionsMu.RUnlock()
 
-			zap.L().Error("Too many connections", zap.String("id", req.ID))
+			zap.L().Error("Too many connections", zap.String("id", req.SecretKeyID))
 			err = protocol.SendRespHeadError(conn, protocol.ActionConnect, "Too many connections", cipher)
 			if err != nil {
 				zap.L().Error("Failed to send error", zap.Error(err))
@@ -263,17 +263,17 @@ func (r *Relay) handleConnect(conn net.Conn, head protocol.ReqHead, cipher crypt
 		}
 	}
 
-	r.AddConnection(req.ID, conn, authKey, cipher)
+	r.AddConnection(req.SecretKeyID, conn, authKey, cipher)
 
 	err = protocol.SendRespHeadOk(conn, protocol.ActionConnect, cipher)
 	if err != nil {
-		zap.L().Error("Failed to send OK", zap.Error(err), zap.String("id", req.ID),
+		zap.L().Error("Failed to send OK", zap.Error(err), zap.String("id", req.SecretKeyID),
 			zap.String("addr", conn.RemoteAddr().String()))
-		r.RemoveLongConnection(req.ID)
+		r.RemoveLongConnection(req.SecretKeyID)
 		return
 	}
 
-	zap.L().Info("Connection established", zap.String("id", req.ID),
+	zap.L().Info("Connection established", zap.String("id", req.SecretKeyID),
 		zap.String("addr", conn.RemoteAddr().String()))
 	success = true
 }
@@ -363,23 +363,23 @@ func (r *Relay) handleRelay(conn net.Conn, head protocol.ReqHead, cipher crypto.
 		return
 	}
 
-	if !r.idRateLimiter.Allow(req.ID) {
-		zap.L().Error("ID rate limit exceeded", zap.String("id", req.ID))
+	if !r.idRateLimiter.Allow(req.SecretKeyID) {
+		zap.L().Error("ID rate limit exceeded", zap.String("id", req.SecretKeyID))
 		_ = protocol.SendRespHeadError(conn, head.Action, "ID rate limit exceeded", cipher)
 		return
 	}
 
-	l = l.With(zap.String("ID", req.ID))
+	l = l.With(zap.String("ID", req.SecretKeyID))
 	l.Info("Relay request")
 	defer func() {
-		r.storage.AddRelayStatistic(req.ID, relaySuccess, relayOffline, int(time.Since(now).Milliseconds()), relayDataLen)
+		r.storage.AddRelayStatistic(req.SecretKeyID, relaySuccess, relayOffline, int(time.Since(now).Milliseconds()), relayDataLen)
 	}()
 
 	r.connectionsMu.RLock()
-	targetConn, ok := r.connections[req.ID]
+	targetConn, ok := r.connections[req.SecretKeyID]
 	r.connectionsMu.RUnlock()
 	if !ok {
-		l.Info("device not online", zap.String("id", req.ID))
+		l.Info("device not online", zap.String("id", req.SecretKeyID))
 		relayOffline = true
 		err := protocol.SendRespHeadError(conn, protocol.ActionRelay, "device not online", cipher)
 		if err != nil {

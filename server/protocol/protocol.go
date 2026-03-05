@@ -54,7 +54,7 @@ type RespHead struct {
 }
 
 type CommonReq struct {
-	ID string `json:"id"`
+	SecretKeyID string `json:"id"`
 }
 type ConnectionReq struct {
 	CommonReq

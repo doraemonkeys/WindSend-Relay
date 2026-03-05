@@ -58,7 +58,7 @@ func (c *Connection) sendMsgDetectAlive() (alive bool) {
 	select {
 	case err := <-result:
 		if err != nil {
-			l.Error("Failed to receive heartbeat", zap.Error(err))
+			l.Warn("Failed to receive heartbeat", zap.Error(err))
 			return false
 		}
 		c.LastNormalActive = time.Now()

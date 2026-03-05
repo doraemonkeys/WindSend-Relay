@@ -162,7 +162,7 @@ func SendHeartbeatNoResp(conn net.Conn, cipher ...crypto.SymmetricCipher) error 
 
 func SendHeartbeat(conn net.Conn, id string, cipher ...crypto.SymmetricCipher) error {
 	var req HeartbeatReq
-	req.CommonReq.ID = id
+	req.CommonReq.SecretKeyID = id
 	req.NeedResp = true
 
 	return sendReqHeadWithBody(conn, ActionHeartbeat, req, cipher...)

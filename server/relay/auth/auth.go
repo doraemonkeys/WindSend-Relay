@@ -31,11 +31,11 @@ func NewAuthentication(keys []string) *Authentication {
 	}
 	zap.L().Debug("random salt", zap.String("salt", base64.StdEncoding.EncodeToString(randomSalt)))
 
-	rawKeyToAES192Key := make(map[string]tool.AES192Key, len(keys))
+	rawKeyMapToAES192Key := make(map[string]tool.AES192Key, len(keys))
 	selectors := make(map[string][]tool.AES192Key, len(keys))
 	for i, key := range keys {
 		aesKey := tool.AES192KeyKDF(key, randomSalt)
-		rawKeyToAES192Key[key] = aesKey
+		rawKeyMapToAES192Key[key] = aesKey
 		selector := getAES192KeySelector(aesKey)
 		ks, ok := selectors[selector]
 		if !ok {
@@ -54,7 +54,7 @@ func NewAuthentication(keys []string) *Authentication {
 		RawKeyList:        keys,
 		KeySelectors:      selectors,
 		randomSalt:        randomSalt,
-		rawKeyToAES192Key: rawKeyToAES192Key,
+		rawKeyToAES192Key: rawKeyMapToAES192Key,
 	}
 }
 
