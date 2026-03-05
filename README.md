@@ -8,7 +8,7 @@
 
 
 
-WindSend-Relay is a Go implementation of the [WindSend](https://github.com/doraemonkeys/WindSend) relay server. WindSend uses TLS certificates for authentication and encrypts the relay traffic, ensuring data security even when using third-party relay servers.
+WindSend-Relay is a Go implementation of the [WindSend](https://github.com/doraemonkeys/WindSend) relay server. WindSend itself uses TLS certificates for mutual authentication and end-to-end encrypts traffic between clients, independent of the relay server. This means data remains secure even when routed through an untrusted third-party relay.
 
 ## Quick Start with Docker
 

@@ -8,7 +8,7 @@
 
 
 
-WindSend-Relay 是 [WindSend](https://github.com/doraemonkeys/WindSend) 中继服务器的 Go 语言实现。WindSend 使用 TLS 证书进行身份验证并加密中继流量，即使在使用第三方中继服务器时也能确保数据安全。
+WindSend-Relay 是 [WindSend](https://github.com/doraemonkeys/WindSend) 中继服务器的 Go 语言实现。WindSend 客户端自身内置了基于 TLS 证书的双向认证和端到端加密，不依赖中继服务器提供安全保障。因此即使中继服务器由不可信的第三方运营，传输数据仍然是安全的。
 
 
 ## 使用 Docker 快速开始
