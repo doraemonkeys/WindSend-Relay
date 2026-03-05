@@ -8,6 +8,12 @@ const (
 	StatusAuthFailed StatusCode = 1
 	// StatusKDFSaltMismatch is the status code for the KDF salt mismatch
 	StatusKDFSaltMismatch StatusCode = 2
+	// StatusDeviceBusy indicates the target device has connections but all are in use.
+	// The sender (Flutter) should retry after a short delay.
+	StatusDeviceBusy StatusCode = 3
+	// StatusDeviceOffline indicates the target device has no connections at all.
+	// The sender (Flutter) should not retry.
+	StatusDeviceOffline StatusCode = 4
 )
 
 type HandshakeReq struct {

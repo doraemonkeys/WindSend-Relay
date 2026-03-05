@@ -1,11 +1,9 @@
 package relay
 
 import (
-	"fmt"
-	"math/rand/v2"
+	"sync"
 	"time"
 
-	"github.com/doraemonkeys/WindSend-Relay/server/protocol"
 	"go.uber.org/zap"
 )
 
@@ -13,56 +11,108 @@ func (r *Relay) detectConnectionAlive() {
 	const detectInterval = time.Second * 60
 	for {
 		time.Sleep(detectInterval)
-		if len(r.connections) == 0 {
-			continue
-		}
 
-		connections := make([]*Connection, 0, len(r.connections))
+		// Snapshot all pool pointers + device IDs under the read lock.
 		r.connectionsMu.RLock()
-		for _, c := range r.connections {
-			connections = append(connections, c)
+		type poolEntry struct {
+			id   string
+			pool *DeviceConnPool
+		}
+		entries := make([]poolEntry, 0, len(r.connections))
+		for id, pool := range r.connections {
+			entries = append(entries, poolEntry{id: id, pool: pool})
 		}
 		r.connectionsMu.RUnlock()
 
-		for _, c := range connections {
-			if c.Relaying {
-				if c.LastNormalActive.Add(time.Hour * 6).Before(time.Now()) {
-					zap.L().Error("unexpected: connection is relaying and timeout", zap.String("id", c.ID),
-						zap.String("addr", c.Conn.RemoteAddr().String()))
-					r.RemoveLongConnection(c.ID)
-				}
-				continue
-			}
-			if time.Since(c.LastNormalActive) < detectInterval/2 {
-				zap.L().Debug("connection last active is recent, skip detect", zap.String("id", c.ID),
-					zap.String("addr", c.Conn.RemoteAddr().String()))
-				continue
-			}
-			err := c.detectAliveRandom()
-			if err != nil {
-				zap.L().Info("detect connection alive failed", zap.Error(err),
-					zap.String("id", c.ID), zap.String("addr", c.Conn.RemoteAddr().String()))
-				r.RemoveLongConnection(c.ID)
+		for _, entry := range entries {
+			r.probePool(entry.id, entry.pool)
+		}
+
+		// denyList TTL cleanup at the end of each scan cycle.
+		r.denyListMu.Lock()
+		for id, deniedAt := range r.denyList {
+			if time.Since(time.UnixMilli(deniedAt)) >= denyTTL {
+				delete(r.denyList, id)
 			}
 		}
+		r.denyListMu.Unlock()
 	}
 }
 
-func (c *Connection) detectAliveRandom() error {
-	var err error
-	c.Mu.Lock()
-	defer c.Mu.Unlock()
+// probePool uses the "borrow-out" model to probe all idle connections in a pool.
+// Lock-remove conns + probingCount increment + epoch snapshot, unlock, probe,
+// lock-return alive if epoch matches, release dead.
+func (r *Relay) probePool(deviceID string, pool *DeviceConnPool) {
+	// Borrow out all idle connections.
+	pool.mu.Lock()
+	if len(pool.conns) == 0 {
+		pool.mu.Unlock()
+		// No idle connections to probe, but the pool may be stale
+		// (all connections died between keepalive cycles). Attempt cleanup
+		// so that it doesn't linger in the connections map indefinitely.
+		r.tryCleanupPool(deviceID, pool)
+		return
+	}
+	probing := pool.conns
+	pool.conns = nil // Must be nil, not [:0], to avoid aliasing the backing array.
+	pool.probingCount.Add(int32(len(probing)))
+	epochSnapshot := pool.epoch.Load()
+	pool.mu.Unlock()
 
-	if rand.IntN(10) == 0 {
-		ok := c.sendMsgDetectAlive()
-		if !ok {
-			return fmt.Errorf("detect failed")
+	// Probe all connections concurrently to avoid serial 2-second timeouts
+	// compounding into O(N * timeout) worst-case latency.
+	type probeResult struct {
+		conn  *Connection
+		alive bool
+	}
+	results := make([]probeResult, len(probing))
+	var wg sync.WaitGroup
+	for i, c := range probing {
+		wg.Add(1)
+		go func(idx int, conn *Connection) {
+			defer wg.Done()
+			results[idx] = probeResult{conn: conn, alive: conn.sendMsgDetectAlive()}
+		}(i, c)
+	}
+	wg.Wait()
+
+	var alive, dead []*Connection
+	for _, res := range results {
+		if res.alive {
+			alive = append(alive, res.conn)
+		} else {
+			dead = append(dead, res.conn)
 		}
 	}
-	err = protocol.SendHeartbeatNoResp(c.Conn, c.Cipher)
-	if err != nil {
-		return err
+
+	// Return alive connections to the pool (if epoch hasn't changed).
+	pool.mu.Lock()
+	pool.probingCount.Add(-int32(len(probing)))
+	if pool.epoch.Load() == epochSnapshot {
+		// Epoch unchanged — safe to return alive connections.
+		pool.conns = append(pool.conns, alive...)
+	} else {
+		// Epoch changed (admin close/:id during probing) — don't re-insert.
+		dead = append(dead, alive...)
+		alive = nil
 	}
-	c.LastNormalActive = time.Now()
-	return nil
+	pool.mu.Unlock()
+
+	// Notify waiter if we returned any alive connections.
+	if len(alive) > 0 {
+		select {
+		case pool.notifyCh <- struct{}{}:
+		default:
+		}
+	}
+
+	// Close dead connections (decrement global/per-secret counters).
+	for _, c := range dead {
+		r.releaseConnection(c)
+		zap.L().Info("heartbeat probe: connection dead",
+			zap.String("id", c.ID), zap.String("addr", c.Conn.RemoteAddr().String()))
+	}
+
+	// Trigger pool cleanup after probing (in case all connections died).
+	r.tryCleanupPool(deviceID, pool)
 }

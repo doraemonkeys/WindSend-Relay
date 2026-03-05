@@ -192,6 +192,16 @@ func SendRespHeadError(conn net.Conn, action Action, msg string, cipher ...crypt
 	return sendStruct(conn, head, cipher...)
 }
 
+// SendRespHead sends a response head with an arbitrary status code.
+// Used for sending DEVICE_BUSY, DEVICE_OFFLINE, etc.
+func SendRespHead(conn net.Conn, action Action, code StatusCode, msg string, cipher ...crypto.SymmetricCipher) error {
+	var head RespHead
+	head.Code = code
+	head.Msg = msg
+	head.Action = action
+	return sendStruct(conn, head, cipher...)
+}
+
 func SendRelayStart(conn net.Conn, cipher ...crypto.SymmetricCipher) error {
 	var head ReqHead
 	head.Action = ActionRelay

@@ -1,11 +1,13 @@
 {
   "action": {
+    "allowConnection": "允许连接",
     "closeConnection": "关闭连接",
     "editName": "编辑名称"
   },
   "activeConnections": "活跃连接",
   "appName": "连接管理系统",
   "button": {
+    "allow": "允许",
     "cancel": "取消",
     "close": "关闭",
     "dismiss": "关闭",
@@ -17,10 +19,13 @@
     "statistics": "统计数据"
   },
   "connection": {
+    "activeCount": "活跃连接数",
     "connectTime": "连接时间",
     "createdAt": "创建时间",
     "duration": "持续时间",
+    "idleCount": "空闲连接数",
     "lastActive": "最后活动",
+    "probingCount": "探测连接数",
     "traffic": "传输量",
     "updatedAt": "更新时间"
   },
@@ -31,6 +36,7 @@
     "tryOtherSearch": "请尝试其他搜索条件"
   },
   "error": {
+    "allowConnectionFailed": "允许连接失败",
     "closeConnectionFailed": "关闭连接失败",
     "customNameCannotBeEmpty": "自定义名称不能为空",
     "fetchConnections": "获取连接状态失败",
@@ -58,7 +64,7 @@
     "customName": "输入自定义名称"
   },
   "search": {
-    "placeholderConnections": "搜索连接地址、ID、自定义名称..."
+    "placeholderConnections": "搜索自定义名称或ID..."
   },
   "statisticView": {
     "backToHome": "返回主页",
@@ -111,11 +117,15 @@
   "stats": {
     "active": "活跃中",
     "idle": "空闲",
+    "denied": "已封禁",
+    "probing": "探测中",
     "totalConnections": "总连接数"
   },
   "status": {
     "active": "活跃中",
-    "idle": "空闲"
+    "denied": "已封禁",
+    "idle": "空闲",
+    "probing": "探测中"
   },
   "tooltip": {
     "editName": "编辑自定义名称",

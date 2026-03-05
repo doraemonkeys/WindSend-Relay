@@ -2,6 +2,7 @@ package relay
 
 import (
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -20,21 +21,58 @@ import (
 	"go.uber.org/zap"
 )
 
+const (
+	// maxConnsPerDevice is the per-ID total connection cap (idle + active + probing).
+	maxConnsPerDevice = 16
+	// maxWaitersPerDevice caps the number of goroutines that may block waiting
+	// for an idle connection before returning DEVICE_BUSY immediately.
+	maxWaitersPerDevice int32 = 8
+	// waitTimeout is how long a relay request will wait for a new idle connection.
+	waitTimeout = 3 * time.Second
+	// reconnectWindow is the grace period after the last relay ends, during which
+	// we assume Rust is reconnecting. Prevents premature OFFLINE verdicts and
+	// premature pool cleanup.
+	reconnectWindow = 5 * time.Second
+	// denyTTL is how long an admin-denied device ID stays rejected.
+	denyTTL = 5 * time.Minute
+)
+
+// Sentinel errors for the wait path.
+var (
+	errDeviceBusy    = errors.New("device busy")
+	errDeviceOffline = errors.New("device offline")
+)
+
+type SecretLimit struct {
+	count atomic.Int32
+	limit int
+}
+
 type Relay struct {
 	config config.Config
 	// nil when no secret keys
 	authenticator *auth.Authentication
 	storage       storage.Storage
-	// ID -> Connection
-	connections   map[string]*Connection
+
+	// ID -> DeviceConnPool
+	connections   map[string]*DeviceConnPool
 	connectionsMu sync.RWMutex
-	keyConnLimit  map[string]*struct {
-		count atomic.Int32
-		limit int
-	}
+
+	// globalConnCount tracks the true total number of registered connections
+	// across all device IDs (atomic, not derived from map size).
+	globalConnCount atomic.Int32
+
+	keyConnLimit   map[string]*SecretLimit
 	keyConnLimitMu sync.RWMutex
-	idRateLimiter  *doraemon.RateLimiter
-	ipRateLimiter  *doraemon.RateLimiter
+
+	// denyList stores device IDs that have been administratively denied.
+	// Value is the Unix-milli timestamp when the deny was issued.
+	// Protected by denyListMu; independent of DeviceConnPool lifecycle.
+	denyList   map[string]int64
+	denyListMu sync.RWMutex
+
+	idRateLimiter *doraemon.RateLimiter
+	ipRateLimiter *doraemon.RateLimiter
 }
 
 func NewRelay(config config.Config, storage storage.Storage) *Relay {
@@ -50,16 +88,10 @@ func NewRelay(config config.Config, storage storage.Storage) *Relay {
 		zap.L().Warn("No secret keys, authentication is disabled")
 		at = nil
 	}
-	connLimit := make(map[string]*struct {
-		count atomic.Int32
-		limit int
-	}, len(rawSecretKeys))
+	connLimit := make(map[string]*SecretLimit, len(rawSecretKeys))
 	for _, secret := range config.SecretInfo {
 		authKeyB64 := base64.StdEncoding.EncodeToString(rawKeyToAES192Key[secret.SecretKey])
-		connLimit[authKeyB64] = &struct {
-			count atomic.Int32
-			limit int
-		}{count: atomic.Int32{}, limit: secret.MaxConn}
+		connLimit[authKeyB64] = &SecretLimit{count: atomic.Int32{}, limit: secret.MaxConn}
 	}
 
 	if config.EnableAuth && len(rawSecretKeys) == 0 {
@@ -70,7 +102,8 @@ func NewRelay(config config.Config, storage storage.Storage) *Relay {
 		authenticator: at,
 		storage:       storage,
 		keyConnLimit:  connLimit,
-		connections:   make(map[string]*Connection),
+		connections:   make(map[string]*DeviceConnPool),
+		denyList:      make(map[string]int64),
 		idRateLimiter: doraemon.NewRateLimiter(120, time.Minute, 6),
 		ipRateLimiter: doraemon.NewRateLimiter(1000, time.Minute, 6),
 	}
@@ -90,49 +123,102 @@ func (r *Relay) Run() {
 		conn, err := listener.Accept()
 		if err != nil {
 			zap.L().Error("Failed to accept", zap.Error(err))
+			continue
 		}
 		zap.L().Info("Accepted connection", zap.String("addr", conn.RemoteAddr().String()))
 		go r.mainProcess(conn)
 	}
 }
 
-type ConnectionStatus struct {
-	ID          string
-	ReqAddr     string
-	ConnectTime time.Time
-	LastActive  time.Time
-	Relaying    bool
+// --- Status types for admin API ---
+
+type DevicePoolStatus struct {
+	ID            string
+	IdleCount     int
+	ActiveCount   int
+	ProbingCount  int
+	LastRelayTime int64
+	Denied        bool
 }
 
-func (r *Relay) GetAllStatus() []ConnectionStatus {
+func (r *Relay) GetAllStatus() []DevicePoolStatus {
 	r.connectionsMu.RLock()
-	defer r.connectionsMu.RUnlock()
-	statuses := make([]ConnectionStatus, 0, len(r.connections))
-	for _, c := range r.connections {
-		statuses = append(statuses, ConnectionStatus{
-			ID:          c.ID,
-			ReqAddr:     c.Conn.RemoteAddr().String(),
-			ConnectTime: c.ConnectTime,
-			LastActive:  c.LastNormalActive,
-			Relaying:    c.Relaying,
+	statuses := make([]DevicePoolStatus, 0, len(r.connections))
+	for id, pool := range r.connections {
+		pool.mu.Lock()
+		idle := len(pool.conns)
+		pool.mu.Unlock()
+		statuses = append(statuses, DevicePoolStatus{
+			ID:            id,
+			IdleCount:     idle,
+			ActiveCount:   int(pool.activeCount.Load()),
+			ProbingCount:  int(pool.probingCount.Load()),
+			LastRelayTime: pool.lastRelayTime.Load(),
 		})
 	}
+	r.connectionsMu.RUnlock()
+
+	// Annotate denied status from the independent denyList.
+	r.denyListMu.RLock()
+	for i := range statuses {
+		if deniedAt, ok := r.denyList[statuses[i].ID]; ok && time.Since(time.UnixMilli(deniedAt)) < denyTTL {
+			statuses[i].Denied = true
+		}
+	}
+	// Also include denied IDs that have no pool (pool was cleaned up but deny persists).
+	for id, deniedAt := range r.denyList {
+		if time.Since(time.UnixMilli(deniedAt)) >= denyTTL {
+			continue
+		}
+		found := false
+		for _, s := range statuses {
+			if s.ID == id {
+				found = true
+				break
+			}
+		}
+		if !found {
+			statuses = append(statuses, DevicePoolStatus{
+				ID:     id,
+				Denied: true,
+			})
+		}
+	}
+	r.denyListMu.RUnlock()
+
 	return statuses
 }
 
-func (r *Relay) GetConnectionStatus(id string) (ConnectionStatus, bool) {
+func (r *Relay) GetConnectionStatus(id string) (DevicePoolStatus, bool) {
 	r.connectionsMu.RLock()
-	defer r.connectionsMu.RUnlock()
-	if c, ok := r.connections[id]; ok {
-		return ConnectionStatus{
-			ID:          c.ID,
-			ReqAddr:     c.Conn.RemoteAddr().String(),
-			ConnectTime: c.ConnectTime,
-			LastActive:  c.LastNormalActive,
-			Relaying:    c.Relaying,
-		}, true
+	pool, ok := r.connections[id]
+	r.connectionsMu.RUnlock()
+	if !ok {
+		// Check if the ID is at least in the denyList.
+		r.denyListMu.RLock()
+		deniedAt, denied := r.denyList[id]
+		r.denyListMu.RUnlock()
+		if denied && time.Since(time.UnixMilli(deniedAt)) < denyTTL {
+			return DevicePoolStatus{ID: id, Denied: true}, true
+		}
+		return DevicePoolStatus{}, false
 	}
-	return ConnectionStatus{}, false
+	pool.mu.Lock()
+	idle := len(pool.conns)
+	pool.mu.Unlock()
+	status := DevicePoolStatus{
+		ID:            id,
+		IdleCount:     idle,
+		ActiveCount:   int(pool.activeCount.Load()),
+		ProbingCount:  int(pool.probingCount.Load()),
+		LastRelayTime: pool.lastRelayTime.Load(),
+	}
+	r.denyListMu.RLock()
+	if deniedAt, ok := r.denyList[id]; ok && time.Since(time.UnixMilli(deniedAt)) < denyTTL {
+		status.Denied = true
+	}
+	r.denyListMu.RUnlock()
+	return status, true
 }
 
 func (r *Relay) mainProcess(conn net.Conn) {
@@ -172,18 +258,83 @@ func (r *Relay) mainProcess(conn net.Conn) {
 	}
 }
 
-func (r *Relay) checkConnLimitOk(authKeyB64 string) bool {
+// --- Secret limit helpers ---
+
+func (r *Relay) getSecretLimit(authKeyB64 string) *SecretLimit {
+	if authKeyB64 == "" {
+		return nil
+	}
 	r.keyConnLimitMu.RLock()
 	v, ok := r.keyConnLimit[authKeyB64]
 	r.keyConnLimitMu.RUnlock()
 	if !ok {
 		if r.authenticator != nil {
-			panic("unknown key: " + authKeyB64)
+			keyPreview := authKeyB64
+			if len(keyPreview) > 8 {
+				keyPreview = keyPreview[:8] + "..."
+			}
+			zap.L().Error("getSecretLimit: unknown auth key, closing connection",
+				zap.String("keyPrefix", keyPreview))
+			return nil
 		}
-		return true
+		// No-auth mode: lazily create with max limit.
+		v = &SecretLimit{count: atomic.Int32{}, limit: math.MaxInt32}
+		r.keyConnLimitMu.Lock()
+		// Double-check after acquiring write lock.
+		if existing, ok := r.keyConnLimit[authKeyB64]; ok {
+			v = existing
+		} else {
+			r.keyConnLimit[authKeyB64] = v
+		}
+		r.keyConnLimitMu.Unlock()
 	}
-	return v.count.Load() < int32(v.limit)
+	return v
 }
+
+// --- Connection release helpers ---
+
+// releaseConnection closes a connection and decrements the global and per-secret
+// quota counters, pairing with the atomic reservation during registration (1.5).
+// The caller must separately decrement activeCount or probingCount.
+func (r *Relay) releaseConnection(conn *Connection) {
+	_ = conn.Conn.Close()
+	r.globalConnCount.Add(-1)
+	if sl := r.getSecretLimit(conn.AuthkeyB64); sl != nil {
+		sl.count.Add(-1)
+	}
+}
+
+// releaseActiveConnection releases a connection that was in active relay:
+// decrements activeCount, updates lastRelayTime, then closes the connection.
+func (r *Relay) releaseActiveConnection(pool *DeviceConnPool, conn *Connection) {
+	r.releaseConnection(conn)
+	pool.activeCount.Add(-1)
+	pool.lastRelayTime.Store(time.Now().UnixMilli())
+}
+
+// --- Pool cleanup ---
+
+// tryCleanupPool attempts to remove the pool map entry for the given device ID.
+// Deletion requires all five conditions to be satisfied simultaneously, plus
+// pointer identity (the pool in the map must be the same object we hold).
+func (r *Relay) tryCleanupPool(deviceID string, p *DeviceConnPool) {
+	r.connectionsMu.Lock()
+	defer r.connectionsMu.Unlock()
+	// Pointer identity check: prevent deleting a pool that was replaced by a new one.
+	if r.connections[deviceID] != p {
+		return
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if len(p.conns) == 0 && p.activeCount.Load() == 0 &&
+		p.pendingCount.Load() == 0 && p.probingCount.Load() == 0 &&
+		p.waiterCount.Load() == 0 &&
+		time.Since(time.UnixMilli(p.lastRelayTime.Load())) >= reconnectWindow {
+		delete(r.connections, deviceID)
+	}
+}
+
+// --- handleConnect ---
 
 func (r *Relay) handleConnect(conn net.Conn, head protocol.ReqHead, cipher crypto.SymmetricCipher, authKey tool.AES192Key) {
 	var success bool
@@ -206,135 +357,142 @@ func (r *Relay) handleConnect(conn net.Conn, head protocol.ReqHead, cipher crypt
 		return
 	}
 
+	deviceID := req.SecretKeyID
+	authKeyB64 := ""
 	if authKey != nil {
-		authKeyB64 := base64.StdEncoding.EncodeToString(authKey)
-		if !r.checkConnLimitOk(authKeyB64) {
-			zap.L().Error("Too many connections", zap.String("secretKey ID", req.SecretKeyID))
-			err = protocol.SendRespHeadError(conn, protocol.ActionConnect, "Too many connections", cipher)
-			if err != nil {
-				zap.L().Error("Failed to send error", zap.Error(err))
-			}
-			return
-		}
+		authKeyB64 = base64.StdEncoding.EncodeToString(authKey)
 	}
 
-	r.connectionsMu.RLock()
-	{
-		if c, ok := r.connections[req.SecretKeyID]; ok {
-			r.connectionsMu.RUnlock()
-			if c.Relaying {
-				zap.L().Warn("connection relay flag is true", zap.String("id", req.SecretKeyID), zap.String("addr", conn.RemoteAddr().String()))
-			}
-			if c.SendMsgDetectAlive() {
-				zap.L().Error("Connection already exists", zap.String("id", req.SecretKeyID))
-				err = protocol.SendRespHeadError(conn, protocol.ActionConnect, "Connection already exists", cipher)
-				if err != nil {
-					zap.L().Error("Failed to send error", zap.Error(err))
-				}
-				return
-			}
-			zap.L().Info("Existing connection not active, removing it", zap.String("id", req.SecretKeyID))
-			r.RemoveLongConnection(req.SecretKeyID)
-
-			r.connectionsMu.RLock()
-		}
-		if len(r.connections) >= r.config.MaxConn {
-			r.connectionsMu.RUnlock()
-
-			zap.L().Error("Too many connections", zap.String("id", req.SecretKeyID))
-			err = protocol.SendRespHeadError(conn, protocol.ActionConnect, "Too many connections", cipher)
-			if err != nil {
-				zap.L().Error("Failed to send error", zap.Error(err))
-			}
-			return
-		}
+	// Step 0: denyList check (independent of pool, checked first)
+	r.denyListMu.RLock()
+	if deniedAt, ok := r.denyList[deviceID]; ok && time.Since(time.UnixMilli(deniedAt)) < denyTTL {
+		r.denyListMu.RUnlock()
+		zap.L().Info("Device denied by admin", zap.String("id", deviceID))
+		_ = protocol.SendRespHeadError(conn, protocol.ActionConnect, "device denied by admin", cipher)
+		return
 	}
-	r.connectionsMu.RUnlock()
+	r.denyListMu.RUnlock()
 
-	if c, ok := conn.(*net.TCPConn); ok {
-		err = c.SetKeepAliveConfig(net.KeepAliveConfig{
-			Enable:   true,
-			Idle:     time.Second * 30,
-			Interval: time.Second * 15,
-			Count:    6,
-		})
-		if err != nil {
-			zap.L().Error("Failed to set keep alive", zap.Error(err))
-		}
-	}
-
-	r.AddConnection(req.SecretKeyID, conn, authKey, cipher)
-
-	err = protocol.SendRespHeadOk(conn, protocol.ActionConnect, cipher)
-	if err != nil {
-		zap.L().Error("Failed to send OK", zap.Error(err), zap.String("id", req.SecretKeyID),
-			zap.String("addr", conn.RemoteAddr().String()))
-		r.RemoveLongConnection(req.SecretKeyID)
+	// Step 1: Global quota reservation (atomic increment, rollback on failure)
+	if r.globalConnCount.Add(1) > int32(r.config.MaxConn) {
+		r.globalConnCount.Add(-1)
+		zap.L().Error("Too many connections (global)", zap.String("id", deviceID))
+		_ = protocol.SendRespHeadError(conn, protocol.ActionConnect, "Too many connections", cipher)
 		return
 	}
 
-	zap.L().Info("Connection established", zap.String("id", req.SecretKeyID),
+	// Step 2: Per-secret quota reservation
+	var secretLimit *SecretLimit
+	if authKeyB64 != "" {
+		secretLimit = r.getSecretLimit(authKeyB64)
+		if secretLimit == nil {
+			r.globalConnCount.Add(-1) // rollback step 1
+			zap.L().Error("Unknown auth key, rejecting connection", zap.String("id", deviceID))
+			_ = protocol.SendRespHeadError(conn, protocol.ActionConnect, "internal error", cipher)
+			return
+		}
+		if secretLimit.count.Add(1) > int32(secretLimit.limit) {
+			secretLimit.count.Add(-1)
+			r.globalConnCount.Add(-1) // rollback step 1
+			zap.L().Error("Too many connections (per-secret)", zap.String("id", deviceID))
+			_ = protocol.SendRespHeadError(conn, protocol.ActionConnect, "Too many connections", cipher)
+			return
+		}
+	}
+
+	// rollbackQuota undoes steps 1 and 2
+	rollbackQuota := func() {
+		if secretLimit != nil {
+			secretLimit.count.Add(-1)
+		}
+		r.globalConnCount.Add(-1)
+	}
+
+	// Build the Connection object before taking locks.
+	c := &Connection{
+		ID:          deviceID,
+		Conn:        conn,
+		ConnectTime: time.Now(),
+		AuthkeyB64:  authKeyB64,
+		Cipher:      cipher,
+	}
+
+	if tc, ok := conn.(*net.TCPConn); ok {
+		_ = tc.SetKeepAliveConfig(net.KeepAliveConfig{
+			Enable: true, Idle: 30 * time.Second, Interval: 15 * time.Second, Count: 6,
+		})
+	}
+
+	// Step 3: Reserve a slot in the pool (checks per-ID capacity inside).
+	// The connection is NOT inserted into the idle queue yet — only a capacity
+	// reservation (pendingCount) is made. This must happen before sending OK
+	// so that a capacity failure can still be communicated as an error response.
+	pool, regErr := r.registerConnectionPending(deviceID, c)
+	if regErr != nil {
+		rollbackQuota()
+		zap.L().Error("Too many connections (per-ID)", zap.String("id", deviceID))
+		_ = protocol.SendRespHeadError(conn, protocol.ActionConnect, "Too many connections", cipher)
+		return
+	}
+
+	// Send OK. On failure, release the reserved slot.
+	err = protocol.SendRespHeadOk(conn, protocol.ActionConnect, cipher)
+	if err != nil {
+		zap.L().Error("Failed to send OK", zap.Error(err), zap.String("id", deviceID))
+		pool.pendingCount.Add(-1)
+		rollbackQuota()
+		return
+	}
+
+	// Activate: insert into the idle queue and notify waiters.
+	pool.activate(c)
+
+	zap.L().Info("Connection established", zap.String("id", deviceID),
 		zap.String("addr", conn.RemoteAddr().String()))
 	success = true
 }
 
-func (r *Relay) AddConnection(id string, conn net.Conn, authKey tool.AES192Key, cipher crypto.SymmetricCipher) {
-	r.connectionsMu.Lock()
-	c := &Connection{
-		ID:               id,
-		Conn:             conn,
-		LastNormalActive: time.Now(),
-		ConnectTime:      time.Now(),
-		Relaying:         false,
-		AuthkeyB64:       base64.StdEncoding.EncodeToString(authKey),
-		Cipher:           cipher,
-	}
-	r.connections[id] = c
-	r.connectionsMu.Unlock()
-	r.addKeyConnCount(c.AuthkeyB64, 1)
-}
-
-func (r *Relay) RemoveLongConnection(id string) {
-	zap.L().Debug("Remove long connection", zap.String("id", id))
-	r.connectionsMu.Lock()
-	c := r.removeConnection(id)
-	r.connectionsMu.Unlock()
-	if c != nil {
-		r.addKeyConnCount(c.AuthkeyB64, -1)
-	}
-}
-
-func (r *Relay) removeConnection(id string) *Connection {
-	if c, ok := r.connections[id]; ok {
-		_ = c.Conn.Close()
-		delete(r.connections, id)
-		return c
-	}
-	return nil
-}
-
-func (r *Relay) addKeyConnCount(key string, add int32) (new int32) {
-	if key == "" {
-		//no auth
-		return 0
-	}
-	r.keyConnLimitMu.RLock()
-	v, ok := r.keyConnLimit[key]
-	r.keyConnLimitMu.RUnlock()
-	if !ok {
-		if r.authenticator != nil {
-			panic("unknown key: " + key)
+// registerConnectionPending reserves a slot in the pool for the given device
+// without inserting the connection. The caller must call pool.activate(c) after
+// the client acknowledges OK, or pool.pendingCount.Add(-1) on failure.
+func (r *Relay) registerConnectionPending(deviceID string, c *Connection) (*DeviceConnPool, error) {
+	// Fast path: pool already exists, read lock suffices.
+	r.connectionsMu.RLock()
+	pool := r.connections[deviceID]
+	if pool != nil {
+		pool.mu.Lock()
+		if pool.totalLocked() >= maxConnsPerDevice {
+			pool.mu.Unlock()
+			r.connectionsMu.RUnlock()
+			return nil, errors.New("per-device connection limit reached")
 		}
-		v = &struct {
-			count atomic.Int32
-			limit int
-		}{count: atomic.Int32{}, limit: math.MaxInt32}
-		r.keyConnLimitMu.Lock()
-		r.keyConnLimit[key] = v
-		r.keyConnLimitMu.Unlock()
+		pool.pendingCount.Add(1)
+		pool.mu.Unlock()
+		r.connectionsMu.RUnlock()
+		return pool, nil
 	}
-	return v.count.Add(add)
+	r.connectionsMu.RUnlock()
+
+	// Slow path: pool doesn't exist, upgrade to write lock to create it.
+	r.connectionsMu.Lock()
+	pool = r.connections[deviceID]
+	if pool == nil {
+		pool = newDeviceConnPool()
+		r.connections[deviceID] = pool
+	}
+	pool.mu.Lock()
+	if pool.totalLocked() >= maxConnsPerDevice {
+		pool.mu.Unlock()
+		r.connectionsMu.Unlock()
+		return nil, errors.New("per-device connection limit reached")
+	}
+	pool.pendingCount.Add(1)
+	pool.mu.Unlock()
+	r.connectionsMu.Unlock()
+	return pool, nil
 }
+
+// --- handlePing ---
 
 func (r *Relay) handlePing(conn net.Conn, _ protocol.ReqHead, cipher crypto.SymmetricCipher) {
 	defer conn.Close()
@@ -347,6 +505,8 @@ func (r *Relay) handlePing(conn net.Conn, _ protocol.ReqHead, cipher crypto.Symm
 		return
 	}
 }
+
+// --- handleRelay ---
 
 func (r *Relay) handleRelay(conn net.Conn, head protocol.ReqHead, cipher crypto.SymmetricCipher) {
 	defer conn.Close()
@@ -369,93 +529,100 @@ func (r *Relay) handleRelay(conn net.Conn, head protocol.ReqHead, cipher crypto.
 		return
 	}
 
-	l = l.With(zap.String("ID", req.SecretKeyID))
+	deviceID := req.SecretKeyID
+	l = l.With(zap.String("ID", deviceID))
 	l.Info("Relay request")
 	defer func() {
-		r.storage.AddRelayStatistic(req.SecretKeyID, relaySuccess, relayOffline, int(time.Since(now).Milliseconds()), relayDataLen)
+		r.storage.AddRelayStatistic(deviceID, relaySuccess, relayOffline, int(time.Since(now).Milliseconds()), relayDataLen)
 	}()
 
-	r.connectionsMu.RLock()
-	targetConn, ok := r.connections[req.SecretKeyID]
-	r.connectionsMu.RUnlock()
-	if !ok {
-		l.Info("device not online", zap.String("id", req.SecretKeyID))
-		relayOffline = true
-		err := protocol.SendRespHeadError(conn, protocol.ActionRelay, "device not online", cipher)
-		if err != nil {
-			l.Error("Failed to send error", zap.Error(err))
-		}
+	// DenyList check: reject relays to administratively denied devices even if
+	// the pool still has leftover connections from before the deny was issued.
+	r.denyListMu.RLock()
+	if deniedAt, ok := r.denyList[deviceID]; ok && time.Since(time.UnixMilli(deniedAt)) < denyTTL {
+		r.denyListMu.RUnlock()
+		l.Info("Device denied by admin", zap.String("id", deviceID))
+		_ = protocol.SendRespHeadError(conn, protocol.ActionRelay, "device denied by admin", cipher)
 		return
 	}
-	// Simple processing without lock, if targetConn is relaying, return an error
-	if targetConn.Relaying {
-		// Handle the case where the two requests are too close together, and the previous connection is about to exit
-		const maxRetry = 5
-		for range maxRetry {
-			if !targetConn.Relaying {
-				break
+	r.denyListMu.RUnlock()
+
+	// Look up the pool.
+	r.connectionsMu.RLock()
+	pool := r.connections[deviceID]
+	r.connectionsMu.RUnlock()
+	if pool == nil {
+		l.Info("device not online", zap.String("id", deviceID))
+		relayOffline = true
+		_ = protocol.SendRespHead(conn, protocol.ActionRelay, protocol.StatusDeviceOffline, "device not online", cipher)
+		return
+	}
+
+	// Try to acquire an idle connection.
+	targetConn := pool.tryAcquire()
+	if targetConn == nil {
+		// Fast offline: if the pool is completely drained (no idle, no active,
+		// no probing) and the reconnect window has elapsed, skip the wait path
+		// to avoid a needless waitTimeout delay.
+		if pool.activeCount.Load() == 0 && pool.probingCount.Load() == 0 {
+			lrt := pool.lastRelayTime.Load()
+			if lrt == 0 || time.Since(time.UnixMilli(lrt)) >= reconnectWindow {
+				relayOffline = true
+				l.Info("device offline (stale empty pool)", zap.String("id", deviceID))
+				_ = protocol.SendRespHead(conn, protocol.ActionRelay, protocol.StatusDeviceOffline, "device not online", cipher)
+				r.tryCleanupPool(deviceID, pool)
+				return
 			}
-			time.Sleep(time.Millisecond * 200)
 		}
-		if targetConn.Relaying {
-			l.Error("Connection is already relaying")
-			err := protocol.SendRespHeadError(conn, protocol.ActionRelay, "Connection is already relaying", cipher)
-			if err != nil {
-				l.Error("Failed to send error", zap.Error(err))
+
+		// Enter wait path.
+		var waitErr error
+		targetConn, waitErr = r.waitForConnection(pool)
+		if waitErr != nil {
+			if errors.Is(waitErr, errDeviceOffline) {
+				relayOffline = true
+				l.Info("device offline (wait timeout)", zap.String("id", deviceID))
+				_ = protocol.SendRespHead(conn, protocol.ActionRelay, protocol.StatusDeviceOffline, "device not online", cipher)
+			} else {
+				l.Info("device busy (wait timeout)", zap.String("id", deviceID))
+				_ = protocol.SendRespHead(conn, protocol.ActionRelay, protocol.StatusDeviceBusy, "device busy", cipher)
 			}
 			return
-		} else {
-			l.Debug("Edge case: previous connection is about to exit, retry")
 		}
 	}
 
+	// targetConn acquired (activeCount already incremented by tryAcquire).
+	// Register deferred cleanup: close connection + activeCount -1 + pool cleanup.
+	defer func() {
+		r.releaseActiveConnection(pool, targetConn)
+		r.tryCleanupPool(deviceID, pool)
+	}()
+
+	// Send success to Flutter before bridging.
 	err = protocol.SendRespHeadOKWithMsg(conn, protocol.ActionRelay, "Relay start", cipher)
 	if err != nil {
 		l.Error("Failed to reply to client relay start", zap.Error(err))
 		return
 	}
 
-	if c, ok := conn.(*net.TCPConn); ok {
-		err = c.SetKeepAliveConfig(net.KeepAliveConfig{
-			Enable:   true,
-			Idle:     time.Second * 2,
-			Interval: time.Second * 1,
-			Count:    3,
+	if tc, ok := conn.(*net.TCPConn); ok {
+		_ = tc.SetKeepAliveConfig(net.KeepAliveConfig{
+			Enable: true, Idle: 2 * time.Second, Interval: 1 * time.Second, Count: 3,
 		})
-		if err != nil {
-			l.Error("Failed to set keep alive", zap.Error(err))
-		}
 	}
 
-	targetConn.Mu.Lock()
-	defer func() {
-		targetConn.Mu.Unlock()
-		targetConn.Relaying = false
-	}()
-	targetConn.Relaying = true
-	defer func() {
-		if !relaySuccess {
-			r.RemoveLongConnection(targetConn.ID)
-			return
-		}
-		// run in a new goroutine to avoid deadlocks
-		go func() {
-			// zap.L().Debug("try to read relay end flag")
-			alive := targetConn.SendMsgDetectAlive()
-			if alive {
-				zap.L().Debug("read relay end flag success")
-			} else {
-				zap.L().Error("targetConn is not alive after relay", zap.String("id", targetConn.ID),
-					zap.String("addr", targetConn.Conn.RemoteAddr().String()))
-				r.RemoveLongConnection(targetConn.ID)
-			}
-		}()
-	}()
+	// Send relay-start command to Rust.
+	// Set a short write deadline so silently-dead connections fail fast
+	// instead of hanging until the OS TCP timeout (~2 min).
+	_ = targetConn.Conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
 	err = protocol.SendRelayStart(targetConn.Conn, targetConn.Cipher)
+	_ = targetConn.Conn.SetWriteDeadline(time.Time{}) // clear deadline
 	if err != nil {
 		l.Error("Failed to send relay start to targetConn", zap.Error(err))
 		return
 	}
+
+	// Bridge Flutter <-> Rust.
 	err = r.relay(targetConn, conn, &relayDataLen)
 	if err != nil {
 		l.Error("relay data failed", zap.Error(err))
@@ -463,18 +630,55 @@ func (r *Relay) handleRelay(conn net.Conn, head protocol.ReqHead, cipher crypto.
 	}
 	zap.L().Debug("relay data success", zap.String("targetConn", targetConn.ID),
 		zap.String("reqConn", conn.RemoteAddr().String()))
-	targetConn.LastNormalActive = time.Now()
 	relaySuccess = true
+}
+
+// waitForConnection blocks until an idle connection is available or timeout.
+// Returns errDeviceBusy or errDeviceOffline on timeout depending on pool state.
+func (r *Relay) waitForConnection(pool *DeviceConnPool) (*Connection, error) {
+	if pool.waiterCount.Add(1) > maxWaitersPerDevice {
+		pool.waiterCount.Add(-1)
+		return nil, errDeviceBusy
+	}
+	defer pool.waiterCount.Add(-1)
+
+	timer := time.NewTimer(waitTimeout)
+	defer timer.Stop()
+
+	for {
+		select {
+		case <-pool.notifyCh:
+			if conn := pool.tryAcquire(); conn != nil {
+				return conn, nil
+			}
+			// Another goroutine grabbed it; loop back and wait again.
+		case <-timer.C:
+			// Determine BUSY vs OFFLINE based on pool state.
+			active := pool.activeCount.Load()
+			probing := pool.probingCount.Load()
+			pending := pool.pendingCount.Load()
+			if active > 0 || probing > 0 || pending > 0 {
+				return nil, errDeviceBusy
+			}
+			// No active or probing connections. Check lastRelayTime for reconnect window.
+			lrt := pool.lastRelayTime.Load()
+			if lrt > 0 && time.Since(time.UnixMilli(lrt)) < reconnectWindow {
+				return nil, errDeviceBusy
+			}
+			return nil, errDeviceOffline
+		}
+	}
 }
 
 func (r *Relay) relay(targetConn *Connection, reqConn net.Conn, relayDataLen *int64) error {
 	var errCH = make(chan error, 2)
-	activelyTimeOut := false
+	var activelyTimeOut atomic.Bool
 	go func() {
 		n, err := io.Copy(targetConn.Conn, reqConn)
 		atomic.AddInt64(relayDataLen, int64(n))
-		activelyTimeOut = true
-		setErr := targetConn.Conn.SetReadDeadline(time.Unix(1136142245, 0))
+		activelyTimeOut.Store(true)
+		// Set a deadline in the past to unblock the reverse io.Copy immediately.
+		setErr := targetConn.Conn.SetReadDeadline(time.Now().Add(-time.Second))
 		if setErr != nil {
 			zap.L().Error("Failed to set read deadline", zap.Error(setErr))
 		}
@@ -488,11 +692,10 @@ func (r *Relay) relay(targetConn *Connection, reqConn net.Conn, relayDataLen *in
 	go func() {
 		n, err := io.Copy(reqConn, targetConn.Conn)
 		atomic.AddInt64(relayDataLen, int64(n))
-		if !activelyTimeOut {
+		if !activelyTimeOut.Load() {
 			if err != nil {
 				errCH <- fmt.Errorf("targetConn -> reqConn: %w", err)
 			} else {
-				// reqConn.SetReadDeadline(time.Unix(1136142245, 0))
 				errCH <- fmt.Errorf("relay dst actively disconnect")
 			}
 			return
@@ -502,21 +705,51 @@ func (r *Relay) relay(targetConn *Connection, reqConn net.Conn, relayDataLen *in
 	}()
 	zap.L().Debug("relay start", zap.String("targetConn", targetConn.Conn.RemoteAddr().String()),
 		zap.String("reqConn", reqConn.RemoteAddr().String()))
-	var err error
+	var relayErr error
 	for range 2 {
-		err = <-errCH
-		if err != nil {
+		relayErr = <-errCH
+		if relayErr != nil {
 			break
 		}
 	}
-	if err != nil {
-		return err
+	return relayErr
+}
+
+// --- Admin helpers ---
+
+// CloseDevice is called by the admin API to deny a device and close all idle connections.
+func (r *Relay) CloseDevice(id string) {
+	// Step 1: Write denyList.
+	r.denyListMu.Lock()
+	r.denyList[id] = time.Now().UnixMilli()
+	r.denyListMu.Unlock()
+
+	// Step 2: Increment epoch + clear pool.
+	r.connectionsMu.RLock()
+	pool := r.connections[id]
+	r.connectionsMu.RUnlock()
+	if pool == nil {
+		return
 	}
 
-	// reset read deadline to avoid read timeout
-	setErr := targetConn.Conn.SetReadDeadline(time.Time{})
-	if setErr != nil {
-		zap.L().Error("Failed to reset read deadline", zap.Error(setErr))
+	pool.mu.Lock()
+	pool.epoch.Add(1)
+	idleConns := pool.conns
+	pool.conns = nil
+	pool.mu.Unlock()
+
+	// Close all idle connections outside the lock.
+	for _, c := range idleConns {
+		r.releaseConnection(c)
 	}
-	return nil
+
+	// Try to clean up the pool entry.
+	r.tryCleanupPool(id, pool)
+}
+
+// AllowDevice removes a device ID from the denyList (admin manual override).
+func (r *Relay) AllowDevice(id string) {
+	r.denyListMu.Lock()
+	delete(r.denyList, id)
+	r.denyListMu.Unlock()
 }

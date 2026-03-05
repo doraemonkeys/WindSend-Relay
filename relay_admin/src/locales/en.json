@@ -1,11 +1,13 @@
 {
   "action": {
+    "allowConnection": "Allow Connection",
     "closeConnection": "Close Connection",
     "editName": "Edit Name"
   },
   "activeConnections": "Active Connections",
   "appName": "Connection Management System",
   "button": {
+    "allow": "Allow",
     "cancel": "Cancel",
     "close": "Close",
     "dismiss": "Dismiss",
@@ -17,10 +19,13 @@
     "statistics": "Statistics"
   },
   "connection": {
+    "activeCount": "Active",
     "connectTime": "Connect Time",
     "createdAt": "Created At",
     "duration": "Duration",
+    "idleCount": "Idle",
     "lastActive": "Last Active",
+    "probingCount": "Probing",
     "traffic": "Traffic",
     "updatedAt": "Updated At"
   },
@@ -31,6 +36,7 @@
     "tryOtherSearch": "Please try different search criteria"
   },
   "error": {
+    "allowConnectionFailed": "Failed to allow connection",
     "closeConnectionFailed": "Failed to close connection",
     "customNameCannotBeEmpty": "Custom name cannot be empty.",
     "fetchConnections": "Failed to fetch connection status",
@@ -58,7 +64,7 @@
     "customName": "Enter custom name"
   },
   "search": {
-    "placeholderConnections": "Search by address, custom name, or ID..."
+    "placeholderConnections": "Search by custom name or ID..."
   },
   "statisticView": {
     "backToHome": "Back to Home",
@@ -111,11 +117,15 @@
   "stats": {
     "active": "Active",
     "idle": "Idle",
+    "denied": "Denied",
+    "probing": "Probing",
     "totalConnections": "Total Connections"
   },
   "status": {
     "active": "Active",
-    "idle": "Idle"
+    "denied": "Denied",
+    "idle": "Idle",
+    "probing": "Probing"
   },
   "tooltip": {
     "editName": "Edit custom name",
@@ -128,7 +138,7 @@
     "minute": "Minute",
     "second": "Second"
   },
-  "unit.day": "sky",
-  "unit.hour": "",
+  "unit.day": "Day",
+  "unit.hour": "Hour",
   "viewAndManageCurrentActiveConnections": "View and Manage All Current Active Connections"
 }

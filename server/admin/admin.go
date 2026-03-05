@@ -100,7 +100,8 @@ func (s *AdminServer) SetupRouter() {
 		api.POST("/login", s.handleLogin)
 		api.GET("/conn/statistic", s.authMiddleware(), s.handleGetConnectionStatistic)
 		api.GET("/conn/status", s.authMiddleware(), s.handleGetConnectionStatus)
-		api.GET("/conn/close/:id", s.authMiddleware(), s.handleCloseConnection)
+		api.DELETE("/conn/close/:id", s.authMiddleware(), s.handleCloseConnection)
+		api.PUT("/conn/allow/:id", s.authMiddleware(), s.handleAllowConnection)
 		api.POST("/conn/update", s.authMiddleware(), s.handleUpdateConnection)
 	}
 
@@ -175,7 +176,6 @@ func (s *AdminServer) handleLogin(c *gin.Context) {
 	if username != s.cfg.User || !strings.EqualFold(password, ph) {
 		zap.L().Error("invalid username or password",
 			zap.String("username", username),
-			zap.String("password", password),
 			zap.String("addr", c.Request.RemoteAddr),
 		)
 		c.JSON(http.StatusUnauthorized, gin.H{
@@ -236,16 +236,28 @@ func (s *AdminServer) handleCloseConnection(c *gin.Context) {
 		})
 		return
 	}
-	s.relay.RemoveLongConnection(id)
+	s.relay.CloseDevice(id)
+	c.Status(http.StatusOK)
+}
+
+func (s *AdminServer) handleAllowConnection(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"message": "id is required",
+		})
+		return
+	}
+	s.relay.AllowDevice(id)
 	c.Status(http.StatusOK)
 }
 
 func (s *AdminServer) handleGetConnectionStatus(c *gin.Context) {
 	var resp = make([]dto.ActiveConnection, 0)
 
-	alives := s.relay.GetAllStatus()
-	for _, alive := range alives {
-		stat, err := s.storage.GetHistoryStatisticByID(alive.ID)
+	poolStatuses := s.relay.GetAllStatus()
+	for _, ps := range poolStatuses {
+		stat, err := s.storage.GetHistoryStatisticByID(ps.ID)
 		if err != nil {
 			zap.L().Error("failed to get history statistic", zap.Error(err))
 			c.JSON(http.StatusInternalServerError, gin.H{
@@ -254,12 +266,12 @@ func (s *AdminServer) handleGetConnectionStatus(c *gin.Context) {
 			return
 		}
 		resp = append(resp, dto.ActiveConnection{
-			ID:          alive.ID,
-			CustomName:  stat.CustomName,
-			ReqAddr:     alive.ReqAddr,
-			ConnectTime: alive.ConnectTime,
-			LastActive:  alive.LastActive,
-			Relaying:    alive.Relaying,
+			ID:           ps.ID,
+			CustomName:   stat.CustomName,
+			IdleCount:    ps.IdleCount,
+			ActiveCount:  ps.ActiveCount,
+			ProbingCount: ps.ProbingCount,
+			Denied:       ps.Denied,
 			History: dto.HistoryStatistic{
 				ID:                     stat.ID,
 				CustomName:             stat.CustomName,

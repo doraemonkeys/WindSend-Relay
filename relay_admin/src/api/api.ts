@@ -36,10 +36,10 @@ export interface HistoryStatistic {
 export interface ActiveConnection {
   id: string;
   customName: string;
-  reqAddr: string;
-  connectTime: string | Date;
-  lastActive: string | Date;
-  relaying: boolean;
+  idleCount: number;
+  activeCount: number;
+  probingCount: number;
+  denied: boolean;
   history: HistoryStatistic;
 }
 
@@ -167,9 +167,8 @@ export class ApiClient {
   }
 
   /**
-   * Fetches the status of active connections. Requires authentication.
+   * Fetches per-device pooled connection status. Requires authentication.
    * Corresponds to GET /api/conn/status
-   * Assumes it returns an array of ActiveConnection. Adjust if the structure differs.
    * @returns Promise resolving to an array of active connections.
    */
   async getConnectionStatus(): Promise<ActiveConnection[]> {
@@ -177,14 +176,7 @@ export class ApiClient {
       console.warn('getConnectionStatus called without an auth token set.');
     }
     try {
-      // Assuming the endpoint returns a raw array of connections
       const response = await this.axiosInstance.get<ActiveConnection[]>('/conn/status');
-      // Optional: Parse date strings to Date objects if needed
-      // return response.data.map(conn => ({
-      //   ...conn,
-      //   connectTime: new Date(conn.connectTime),
-      //   lastActive: new Date(conn.lastActive),
-      // }));
       return response.data;
     } catch (error) {
       console.error('Failed to get connection status:', error);
@@ -194,7 +186,7 @@ export class ApiClient {
 
   /**
    * Closes a specific connection by its ID. Requires authentication.
-   * Corresponds to GET /api/conn/close/:id
+   * Corresponds to DELETE /api/conn/close/:id
    * @param id The ID of the connection to close.
    * @returns Promise resolving when the request is complete (void).
    */
@@ -203,11 +195,26 @@ export class ApiClient {
       console.warn('closeConnection called without an auth token set.');
     }
     try {
-      // Using GET as defined in the router, though DELETE might be more conventional
-      await this.axiosInstance.get(`/conn/close/${id}`);
+      await this.axiosInstance.delete(`/conn/close/${id}`);
       // No return value expected on success typically
     } catch (error) {
       console.error(`Failed to close connection ${id}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Allows a denied device ID again.
+   * Corresponds to PUT /api/conn/allow/:id
+   */
+  async allowConnection(id: string): Promise<void> {
+    if (!this.getAuthToken()) {
+      console.warn('allowConnection called without an auth token set.');
+    }
+    try {
+      await this.axiosInstance.put(`/conn/allow/${id}`);
+    } catch (error) {
+      console.error(`Failed to allow connection ${id}:`, error);
       throw error;
     }
   }

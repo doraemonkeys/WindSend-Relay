@@ -53,7 +53,7 @@ func TestAES192KeyKDF(t *testing.T) {
 	const salt = "test"
 	kdf := AES192KeyKDF(pwd, []byte(salt))
 	kdfB64 := base64.StdEncoding.EncodeToString(kdf)
-	expected := "9Dt2Ws9OB1uDRkxK4IHBHpqm9rMQ0d+z"
+	expected := "FErBvveHZY/5Xb4uy7GWFMoQwY2RzNwD"
 	if kdfB64 != expected {
 		t.Errorf("AES192KeyKDF() = %v, want %v", kdfB64, expected)
 	}

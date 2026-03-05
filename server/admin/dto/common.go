@@ -34,14 +34,15 @@ type HistoryStatistic struct {
 	UpdatedAt              time.Time `json:"updatedAt"`
 }
 
+// ActiveConnection is the per-ID aggregated status returned by the admin status endpoint.
 type ActiveConnection struct {
-	ID          string           `json:"id"`
-	CustomName  string           `json:"customName"`
-	ReqAddr     string           `json:"reqAddr"`
-	ConnectTime time.Time        `json:"connectTime"`
-	LastActive  time.Time        `json:"lastActive"`
-	Relaying    bool             `json:"relaying"`
-	History     HistoryStatistic `json:"history"`
+	ID           string           `json:"id"`
+	CustomName   string           `json:"customName"`
+	IdleCount    int              `json:"idleCount"`
+	ActiveCount  int              `json:"activeCount"`
+	ProbingCount int              `json:"probingCount"`
+	Denied       bool             `json:"denied"`
+	History      HistoryStatistic `json:"history"`
 }
 
 type ReqHistoryStatistic struct {
