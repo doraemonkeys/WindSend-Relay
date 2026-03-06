@@ -678,9 +678,9 @@ func (r *Relay) relay(targetConn *Connection, reqConn net.Conn, relayDataLen *in
 		atomic.AddInt64(relayDataLen, int64(n))
 		activelyTimeOut.Store(true)
 		// Set a deadline in the past to unblock the reverse io.Copy immediately.
-		setErr := targetConn.Conn.SetReadDeadline(time.Now().Add(-time.Second))
-		if setErr != nil {
-			zap.L().Error("Failed to set read deadline", zap.Error(setErr))
+		// Expected to fail when targetConn was already closed by the remote side.
+		if setErr := targetConn.Conn.SetReadDeadline(time.Now().Add(-time.Second)); setErr != nil {
+			zap.L().Debug("set targetConn read deadline (expected if dst closed first)", zap.Error(setErr))
 		}
 		if err != nil {
 			errCH <- fmt.Errorf("reqConn -> targetConn: %w", err)
@@ -696,7 +696,14 @@ func (r *Relay) relay(targetConn *Connection, reqConn net.Conn, relayDataLen *in
 			if err != nil {
 				errCH <- fmt.Errorf("targetConn -> reqConn: %w", err)
 			} else {
-				errCH <- fmt.Errorf("relay dst actively disconnect")
+				// Clean EOF: the destination (Rust) finished processing and
+				// closed the bridge connection — normal in the use-once
+				// connection model. The requesting side (Flutter) will close
+				// shortly after (~20 ms drain), at which point the forward
+				// goroutine also completes and relay() returns nil.
+				zap.L().Debug("relay dst finished first (clean EOF)",
+					zap.String("reqConn", reqConn.RemoteAddr().String()))
+				errCH <- nil
 			}
 			return
 		}
