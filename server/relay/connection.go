@@ -143,8 +143,11 @@ func (p *DeviceConnPool) tryAcquire() *Connection {
 // notifies waiters. Must be called only after the client has acknowledged OK,
 // so the connection is truly ready for relay.
 func (p *DeviceConnPool) activate(c *Connection) {
-	p.pendingCount.Add(-1)
 	p.mu.Lock()
+	// Keep the reservation visible until the idle connection is actually present
+	// in the pool. Otherwise cleanup can observe "no pending + no idle" and
+	// delete a just-created pool while activation is still blocked on p.mu.
+	p.pendingCount.Add(-1)
 	p.conns = append(p.conns, c)
 	p.mu.Unlock()
 	select {
